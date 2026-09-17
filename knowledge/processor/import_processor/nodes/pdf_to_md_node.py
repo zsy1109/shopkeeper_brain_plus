@@ -1,156 +1,150 @@
-import json
 import os
-import subprocess
 import sys
+import json
 import time
+import logging
+import subprocess
 from pathlib import Path
-from typing import Tuple
+from typing import Optional
 
-from knowledge.processor.import_processor.base import BaseNode, setup_logging
-from knowledge.processor.import_processor.exceptions import PdfConversionError, StateFieldError
+import requests
+
+from knowledge.processor.import_processor.base import BaseNode
 from knowledge.processor.import_processor.state import ImportGraphState
+from knowledge.processor.import_processor.exceptions import (
+    StateFieldError, FileProcessingError,
+)
+
+logger = logging.getLogger(__name__)
+
+MINERU_HOST = "127.0.0.1"
+MINERU_PORT = 61011
+MINERU_URL = f"http://{MINERU_HOST}:{MINERU_PORT}"
+MINERU_STARTUP_TIMEOUT = 120
+MINERU_PARSE_TIMEOUT = 600
+
+_mineru_process: Optional[subprocess.Popen] = None
+
+
+def _ensure_mineru_running() -> None:
+    global _mineru_process
+
+    try:
+        r = requests.get(f"{MINERU_URL}/health", timeout=5)
+        if r.status_code == 200:
+            return
+    except Exception:
+        pass
+
+    env = os.environ.copy()
+    env.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+    env.setdefault("CUDA_VISIBLE_DEVICES", "")
+    env.setdefault("MINERU_DEVICE_MODE", "cpu")
+
+    _mineru_process = subprocess.Popen(
+        [sys.executable, "-m", "mineru.cli.fast_api",
+         "--host", MINERU_HOST, "--port", str(MINERU_PORT)],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    deadline = time.time() + MINERU_STARTUP_TIMEOUT
+    while time.time() < deadline:
+        try:
+            r = requests.get(f"{MINERU_URL}/health", timeout=5)
+            if r.status_code == 200:
+                logger.info("MinerU API ready (pid=%s)", _mineru_process.pid)
+                return
+        except Exception:
+            pass
+        if _mineru_process.poll() is not None:
+            raise RuntimeError(
+                f"MinerU API exited prematurely (code={_mineru_process.returncode})"
+            )
+        time.sleep(2)
+
+    raise TimeoutError(f"MinerU API not healthy within {MINERU_STARTUP_TIMEOUT}s")
+
+
+def _call_mineru_parse(pdf_path: Path) -> str:
+    _ensure_mineru_running()
+
+    filename = pdf_path.name
+    logger.info("Calling MinerU API to parse %s ...", filename)
+
+    with open(pdf_path, "rb") as f:
+        r = requests.post(
+            f"{MINERU_URL}/file_parse",
+            files={"files": (filename, f, "application/pdf")},
+            data={
+                "backend": "pipeline",
+                "parse_method": "txt",
+                "lang_list": ["ch"],
+            },
+            timeout=MINERU_PARSE_TIMEOUT,
+        )
+
+    if r.status_code != 200:
+        raise RuntimeError(f"MinerU API error {r.status_code}: {r.text[:500]}")
+
+    data = r.json()
+    results = data.get("results", {})
+    if not results:
+        raise RuntimeError(
+            f"MinerU returned no results: {json.dumps(data, ensure_ascii=False)[:500]}"
+        )
+
+    first_key = next(iter(results))
+    md_content = results[first_key].get("md_content", "")
+    if not md_content:
+        raise RuntimeError(f"MinerU returned empty md_content for {first_key}")
+
+    logger.info("MinerU parsed OK, md length=%d", len(md_content))
+    return md_content
 
 
 class PdfToMdNode(BaseNode):
     name = "pdf_to_md_node"
 
+    def __init__(self, config=None):
+        super().__init__(config)
+        _ensure_mineru_running()
+
     def process(self, state: ImportGraphState) -> ImportGraphState:
-        """
-        节点的处理逻辑入口
-
-        :param state: 导入图谱的状态字典，必须包含 import_file_path，可选包含 file_dir
-        :return: 更新后的 state 字典，新增 md_path 字段
-        """
-        import_file_path_obj, file_dir_obj = self._validate_state(state)
-
-        processed_code = self._execute_mineru_parse(import_file_path_obj, file_dir_obj)
-        if processed_code != 0:
-            raise PdfConversionError(message="MinerU解析PDF失败", node_name=self.name)
-
-        md_path = self._get_md_path(import_file_path_obj, file_dir_obj)
-
-        state['md_path'] = md_path
-
-        return state
-
-    def _validate_state(self, state: ImportGraphState) -> Tuple[Path, Path]:
-        """
-        校验并从 state 中提取导入文件路径与输出目录
-
-        :param state: 导入图谱节点状态
-        :return: (导入文件路径对象, 输出目录对象)
-        """
-        self.log_step("step1", "准备校验和获取解析文件路径和输出目录")
-
-        import_file_path = state.get('import_file_path', '')
-
-        if not import_file_path:
-            raise StateFieldError(node_name=self.name, field_name='import_file_path', expected_type=str)
-
-        import_file_path_obj = Path(import_file_path)
-
-        if not import_file_path_obj.exists():
-            raise StateFieldError(node_name=self.name, field_name='import_file_path', expected_type=str,
-                                  message="解析文件的路径不存在")
-
+        pdf_path = state.get('pdf_path', '')
         file_dir = state.get('file_dir', '')
+        file_title = state.get('file_title', '')
 
+        if not pdf_path:
+            raise StateFieldError(node_name=self.name, field_name='pdf_path', expected_type=str)
         if not file_dir:
-            file_dir = import_file_path_obj.parent
+            raise StateFieldError(node_name=self.name, field_name='file_dir', expected_type=str)
 
+        pdf_path_obj = Path(pdf_path)
         file_dir_obj = Path(file_dir)
 
+        if not pdf_path_obj.exists():
+            raise StateFieldError(node_name=self.name, field_name='pdf_path', expected_type=Path)
         if not file_dir_obj.exists():
-            raise StateFieldError(node_name=self.name, field_name='file_dir', expected_type=str,
-                                  message="输出目录不存在")
+            raise StateFieldError(node_name=self.name, field_name='file_dir', expected_type=Path)
 
-        self.logger.info(f"解析的文件路径{import_file_path}")
-        self.logger.info(f"输出的文件目录{file_dir}")
+        md_file = file_dir_obj / f"{file_title}.md"
 
-        return import_file_path_obj, file_dir_obj
-
-    def _execute_mineru_parse(self, import_file_path_obj: Path,
-                              file_dir_obj: Path) -> int:
-        """
-        通过独立子进程调用 mineru CLI 将 PDF 解析为 Markdown。
-        使用子进程避免 MinerU 内部的多进程架构崩溃时连带杀死 FastAPI 进程。
-
-        :param import_file_path_obj: 解析文件的 path 路径
-        :param file_dir_obj: 解析后的文件输出目录
-        :return: 退出码，0 表示成功，非 0 表示失败
-        """
-        start_time = time.time()
-
-        env = os.environ.copy()
-        env.setdefault('MINERU_DEVICE_MODE', 'cpu')
-        env.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
-        env['CUDA_VISIBLE_DEVICES'] = ''
-        env.setdefault('OPENBLAS_NUM_THREADS', '1')
-        env.setdefault('OMP_NUM_THREADS', '1')
-        env.setdefault('MKL_NUM_THREADS', '1')
-
-        cmd = [
-            sys.executable,
-            '-m', 'mineru.cli.client',
-            '-p', str(import_file_path_obj),
-            '-o', str(file_dir_obj),
-            '-b', 'pipeline',
-            '-m', 'txt',
-            '-l', 'ch',
-        ]
-
-        self.logger.info(f"启动 MinerU 子进程: {' '.join(cmd)}")
+        self.log_step("Parse", f"MinerU pipeline -> {pdf_path_obj.name}")
 
         try:
-            result = subprocess.run(
-                cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-            )
-            exit_code = result.returncode
-
-            for line in (result.stdout or '').splitlines():
-                if line.strip():
-                    self.logger.info(f"MinerU OUT: {line}")
-            for line in (result.stderr or '').splitlines():
-                if line.strip():
-                    self.logger.info(f"MinerU ERR: {line}")
+            md_content = _call_mineru_parse(pdf_path_obj)
         except Exception as e:
-            self.logger.error(f"MinerU 子进程启动失败: {e}")
-            exit_code = 1
+            self.logger.error("MinerU parse failed: %s", e)
+            raise FileProcessingError(
+                message=f"PDF解析失败: {e}", node_name=self.name
+            )
 
-        end_time = time.time()
-        if exit_code == 0:
-            self.logger.info(f"MinerU解析PDF成功 耗时:{end_time - start_time:.2f}s")
-        else:
-            self.logger.error(f"MinerU解析PDF失败 exit_code={exit_code}")
+        md_file.write_text(md_content, encoding="utf-8")
+        self.log_step("Save", f"Markdown saved -> {md_file} ({len(md_content)} chars)")
 
-        return exit_code
+        state['md_path'] = str(md_file)
+        state['md_content'] = md_content
 
-    @staticmethod
-    def _get_md_path(import_file_path_obj: Path, file_dir_obj: Path) -> str:
-        """
-        根据输入路径和输出目录，拼出解析后 md 文件的绝对路径
-
-        :param import_file_path_obj: 原始 PDF 文件路径
-        :param file_dir_obj: 输出根目录
-        :return: md 文件的绝对路径字符串
-        """
-        file_name = import_file_path_obj.stem
-        return str(file_dir_obj / file_name / "txt" / f"{file_name}.md")
-
-
-if __name__ == '__main__':
-    setup_logging()
-    pdf_to_md_node = PdfToMdNode()
-
-    init_state = {
-        "import_file_path": r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir\万用表的使用.pdf",
-        "file_dir": r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir"
-    }
-
-    result = pdf_to_md_node.process(init_state)
-
-    result_str = json.dumps(result, indent=4, ensure_ascii=False)
-    print(result_str)
+        return state

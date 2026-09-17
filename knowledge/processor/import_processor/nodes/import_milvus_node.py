@@ -193,7 +193,7 @@ def _cli_main() -> None:
     setup_logging()
 
     temp_dir = Path(
-        r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir"
+        r"D:\pycharm_projects\shopkeeper_brain_plus\knowledge\processor\import_processor\temp_dir"
         )
     input_path = temp_dir / "chunks_vector_bak.json"
     output_path = temp_dir / "chunks_vector_ids.json"

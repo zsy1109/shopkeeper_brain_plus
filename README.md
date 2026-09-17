@@ -1,4 +1,4 @@
-# 掌柜智库 (Shopkeeper Brain)
+# 掌柜智库 (shopkeeper_brain_plus)
 
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688.svg)](https://fastapi.tiangolo.com/)
@@ -16,6 +16,11 @@
 - [核心特性](#核心特性)
 - [技术栈](#技术栈)
 - [架构设计](#架构设计)
+  - [导入流水线](#导入流水线-import-graph)
+  - [查询流水线](#查询流水线-query-graph)
+  - [核心设计模式](#核心设计模式)
+  - [双服务架构](#双服务架构)
+  - [MinerU 子进程隔离](#mineru-子进程隔离)
 - [目录结构](#目录结构)
 - [工作流详解](#工作流详解)
   - [导入工作流](#导入工作流)
@@ -30,8 +35,12 @@
   - [启动中间件](#启动中间件)
   - [启动服务](#启动服务)
 - [API 接口](#api-接口)
+  - [上传校验规则](#上传校验规则)
 - [配置说明](#配置说明)
 - [常见问题排查](#常见问题排查)
+- [MinerU 设备模式](#mineru-设备模式)
+- [E2E RAG 测试报告](#e2e-rag-测试报告)
+- [路径迁移记录](#路径迁移记录)
 - [许可证](#许可证)
 
 ---
@@ -62,13 +71,17 @@
 ## 核心特性
 
 - **双通道架构**：文档导入流水线 + 查询回答流水线，由 LangGraph 状态机编排
+- **多层上传校验**：后缀白名单（仅 .pdf）→ 文件大小检查（≥ 1KB）→ MD5 内容查重，三层防御
+- **健壮错误处理**：校验失败 / 解析异常 / 入库错误全过程 try-except，自动清理临时文件和 MongoDB 记录，不留孤儿数据
 - **混合检索**：Dense（向量）+ Sparse（BM25 关键词）+ HyDE 三路召回，RRF 融合排序
 - **商品名智能识别**：专有的商品名实体识别节点，支持多候选确认
 - **BGE Reranker 重排**：召回后二次精排，显著提升答案相关性
 - **ReAct Agent 模式**：可选的多轮工具调用，支持 MCP DashScope 联网搜索
 - **SSE 流式输出**：查询结果和导入进度实时推送
 - **子进程隔离**：MinerU 解析在独立 OS 子进程中运行，C 扩展崩溃不影响主服务
+- **四层联动删除**：DELETE 接口一键清理 MongoDB 元数据 → Milvus 文档切片向量(`kb_chunks_v1`) → Milvus 商品名向量(`kb_item_names_v1`) → MinIO 图片对象，四层同步删除，保证数据一致性
 - **全链路可观测**：任务状态追踪、耗时统计、历史记录持久化
+- **项目重构优化**：完成项目整体代码重构与路径解耦，支持项目目录重命名，修复虚拟环境中文路径兼容性问题，提升项目可移植性。
 
 ---
 
@@ -99,12 +112,22 @@
 ### 导入流水线 (Import Graph)
 
 ```
-文件上传 → entry_node → pdf_to_md_node(MinerU 子进程)
-                        → md_to_img_node(表格 HTML → 图片)
-                        → document_split_node(按段落切 chunk)
-                        → item_name_recognition_node(qwen-flash 识别商品名)
-                        → embedding_chunks_node(BGE-M3 GPU 混合 embedding)
-                        → import_milvus_node(写入 Milvus + MongoDB)
+HTTP 请求
+  → 后缀校验(.pdf 白名单)
+  → 存盘并计算 MD5
+  → 大小校验(≥ 1KB)
+  → MD5 查重(MongoDB)
+  → MinIO 持久化
+  → 返回 task_id（以上同步完成）
+  ─────────────────────────────
+  → entry_node → pdf_to_md_node(MinerU 子进程)
+                → md_to_img_node(表格 HTML → 图片)
+                → document_split_node(按段落切 chunk)
+                → item_name_recognition_node(qwen-flash 识别商品名)
+                → embedding_chunks_node(BGE-M3 GPU 混合 embedding)
+                → import_milvus_node(写入 Milvus + MongoDB)
+  成功 → 写 MongoDB import_record
+  失败 → 不残留任何记录
 ```
 
 ### 查询流水线 (Query Graph)
@@ -130,12 +153,72 @@
 - **子进程隔离**（`pdf_to_md_node.py`）：MinerU 在 `subprocess.run()` 里跑，C 扩展崩溃不影响 FastAPI
 - **分层 GPU/CPU 策略**：BGE-M3 主进程用 GPU，MinerU 子进程禁 GPU（避免重复加载 cublas64 耗尽虚拟内存）
 
+### 双服务架构
+
+项目拆分为两个独立的 FastAPI 进程，各司其职、互不影响：
+
+| 服务 | 端口 | 职责 | 启动命令 |
+|------|------|------|----------|
+| Import Service | **8000** | 上传校验 + 异步导入 + 文件管理 + 删除 | `python -m knowledge.api.import_router` |
+| Query Service | **8001** | 问答查询 + SSE 流式输出 + 对话历史 | `python -m knowledge.api.query_router` |
+
+**设计考量**：
+
+```
+为什么拆两个服务？
+
+1. GPU 争抢隔离
+   导入：主进程不用 GPU，MinerU 子进程在 CPU 上跑
+   查询：BGE-M3 / BGE-Reranker 需要 GPU（加载后常驻显存 ~6GB）
+   拆开后，8000 导入与 8001 查询不会在同进程内争抢 cublas 和显存
+
+2. 故障隔离
+   导入时 MinerU 子进程可能因 OOM / 中文路径崩溃
+   如果合在一个进程，导入崩溃 → 查询也挂
+   拆开后，MinerU 崩了只影响 8000，8001 查询不受影响
+
+3. 独立扩缩
+   CPU 密集的导入可以给更多线程
+   GPU 密集的查询可以独占 GPU
+   各自 `.env` 调优参数互不干扰
+```
+
+### MinerU 子进程隔离
+
+MinerU（PDF → Markdown 解析引擎）是整个系统风险最高的模块：底层依赖 OpenBLAS、fasttext、onnxruntime 等 C 扩展，Windows 中文路径下极易崩溃。
+
+**隔离策略**（[pdf_to_md_node.py](file:///D:/pycharm_projects/shopkeeper_brain_plus/knowledge/processor/import_processor/nodes/pdf_to_md_node.py)）：
+
+```
+FastAPI 主进程                         子进程
+┌─────────────────────┐     subprocess.run()
+│  pdf_to_md_node.py  │ ──────────────────────► ┌──────────────────┐
+│  (LangGraph 节点)    │                         │ MinerU CLI       │
+│  不 import MinerU    │                         │ magic-pdf 命令    │
+│  不 import torch      │                         │ CUDA_VISIBLE_DEVICES='' │
+│  只等 stdout/stderr  │ ◄────────────────────── │ OPENBLAS_NUM=1   │
+└─────────────────────┘     返回 JSON / exit code │ MKL_NUM=1        │
+                                                  └──────────────────┘
+                                                  子进程崩了↗
+                                                  → 返回非 0 exit code
+                                                  → 主进程捕获, 写错误日志
+                                                  → FastAPI 继续运行, 不影响 8001
+```
+
+关键配置：
+
+| 隔离措施 | 设置位置 | 值 |
+|----------|----------|-----|
+| 禁 GPU | 子进程 env | `CUDA_VISIBLE_DEVICES=''` |
+| 限线程（防内存爆炸） | 子进程 env | `OPENBLAS_NUM_THREADS=1`, `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1` |
+| 限虚拟显存 | `.env` | `MINERU_VIRTUAL_VRAM_SIZE=4`（GB） |
+
 ---
 
 ## 目录结构
 
 ```
-shopkeeper_brain_1/
+shopkeeper_brain_plus/
 ├── .env.example                        # 环境变量模板
 ├── .gitignore
 ├── README.md
@@ -157,9 +240,10 @@ shopkeeper_brain_1/
 │   │   ├── upload_schema.py
 │   │   └── query_schema.py
 │   │
-│   ├── service/                        # 业务服务层（薄封装）
-│   │   ├── upload_service.py
-│   │   └── query_service.py
+│   ├── service/                        # 业务服务层
+│   │   ├── upload_service.py            # 上传 + 校验 + 查重 + MinIO
+│   │   ├── delete_service.py            # 四层联动删除（MongoDB / kb_chunks_v1 / kb_item_names_v1 / MinIO）
+│   │   └── query_service.py             # 查询流水线调用
 │   │
 │   ├── processor/                      # ★ LangGraph 工作流核心
 │   │   ├── import_processor/           #   【导入工作流】
@@ -193,7 +277,8 @@ shopkeeper_brain_1/
 │   │   │   ├── ai_clients.py           #     LLM + BGE 统一入口
 │   │   │   ├── storage_clients.py      #     Milvus + MongoDB + MinIO
 │   │   │   └── base.py
-│   │   ├── milvus_util.py
+│   │   ├── milvus_util.py              #   Milvus 辅助查询
+│   │   ├── mongo_import_util.py        #   MongoDB import_record CRUD + 查重
 │   │   ├── embedding_util.py
 │   │   ├── mongo_history_util.py
 │   │   ├── sse_util.py
@@ -212,7 +297,8 @@ shopkeeper_brain_1/
 │       ├── BAAI--bge-m3/
 │       └── BAAI--bge-reranker-large/
 │
-├── docs/                               # 示例 PDF
+├── check_all_storage.py                # 三端数据巡检脚本（MongoDB / Milvus / MinIO）
+├── docs/                               # 示例 PDF 文件
 └── data/tmp/                           # MinerU 临时输出（已在 gitignore）
 ```
 
@@ -302,6 +388,12 @@ item_name_confirmed_node
 ```
 PDF 文件
   │
+  ▼ 同步校验层 (process_upload_file)
+后缀白名单 → 存盘 + MD5 → 大小检查 → 查重(MongoDB) → MinIO
+  │  ▲ 任一失败 raise FileProcessingError → HTTP 409
+  ▼
+LangGraph 后台工作流
+  │
   ▼ MinerU 子进程 (CUDA_VISIBLE_DEVICES='')
 Markdown + 配图 JSON
   │
@@ -319,7 +411,9 @@ N 个文本 chunk（~500 字/块）
      dense vectors + sparse vectors
           │
           ▼ import_milvus_node
-     Milvus(kb_chunks_v1) + MongoDB(元数据)
+     Milvus(kb_chunks_v1) + MongoDB(import_record)
+          │
+          ▼ 成功则写记录 / 失败不留孤儿
 ```
 
 ### 查询链路
@@ -361,7 +455,7 @@ N 个文本 chunk（~500 字/块）
 ### 安装依赖
 
 ```bash
-cd shopkeeper_brain_1
+cd shopkeeper_brain_plus
 python -m venv .venv
 # Windows PowerShell:
 .venv\Scripts\Activate.ps1
@@ -511,25 +605,25 @@ docker exec my-mongo mongosh --eval "db.runCommand({ping:1})"
 
 ```powershell
 # 终端 1：导入服务（端口 8000）
-cd D:\PyCharm项目\shopkeeper_brain_1
+cd D:\pycharm_projects\shopkeeper_brain_plus
 .venv\Scripts\python.exe -m knowledge.api.import_router
 
 # 终端 2：查询服务（端口 8001）
-cd D:\PyCharm项目\shopkeeper_brain_1
+cd D:\pycharm_projects\shopkeeper_brain_plus
 .venv\Scripts\python.exe -m knowledge.api.query_router
 ```
 
-> **重要**：必须在**项目根目录**（`shopkeeper_brain_1/`）下启动，不能在 `knowledge/` 子目录里跑。否则会报 `ModuleNotFoundError: No module named 'knowledge'`。
+> **重要**：必须在**项目根目录**（`shopkeeper_brain_plus/`）下启动，不能在 `knowledge/` 子目录里跑。否则会报 `ModuleNotFoundError: No module named 'knowledge'`。
 
 #### Linux/macOS：
 
 ```bash
 # 终端 1
-cd shopkeeper_brain_1
+cd shopkeeper_brain_plus
 .venv/bin/python -m knowledge.api.import_router
 
 # 终端 2
-cd shopkeeper_brain_1
+cd shopkeeper_brain_plus
 .venv/bin/python -m knowledge.api.query_router
 ```
 
@@ -554,31 +648,63 @@ INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
 
 ## API 接口
 
-### 导入服务（Port 8000）
+### 导入与管理服务（Port 8000）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/import/upload` | 上传文档（PDF/MD），返回 task_id |
-| GET | `/import/task/{task_id}` | **SSE 流**，推送节点进度 + 最终结果 |
+| POST | `/upload` | 上传文档（仅 .pdf），含后缀/大小/MD5 三层校验 |
+| GET | `/status/{task_id}` | 查询导入任务进度（节点状态 + 耗时） |
+| GET | `/files` | 获取已导入文件列表（支持 `?limit=` 分页） |
+| GET | `/files/{file_id}` | 获取单文件导入详情（MongoDB 元数据） |
+| GET | `/files/{file_id}/chunks` | 获取文件在 Milvus 中的 chunk 预览 |
+| DELETE | `/files/{file_id}` | 删除文档（MongoDB / kb_chunks_v1 / kb_item_names_v1 / MinIO 四层联动清理） |
 
 ### 查询服务（Port 8001）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/query/ask` | **SSE 流**，流式返回答案 |
-| GET | `/history/{session_id}` | 获取对话历史 |
-| DELETE | `/history/{session_id}` | 清空对话历史 |
+| POST | `/query` | 提交查询，返回 `task_id` 和 `session_id` |
+| GET | `/stream/{task_id}` | **SSE 流**，订阅查询答案的流式推送 |
+| GET | `/history/{session_id}` | 获取对话历史（支持 `?limit=`） |
+| DELETE | `/history/{session_id}` | 清空指定 session 的对话历史 |
 
 ### 请求示例
 
 ```bash
-# 查询（流式）
-curl -N -X POST http://localhost:8001/query/ask \
+# 上传 PDF（同步返回 task_id，后台异步解析）
+curl -X POST -F "file=@万用表.pdf" http://localhost:8000/upload
+
+# 查任务进度
+curl http://localhost:8000/status/{task_id}
+
+# 列出已导入文件
+curl "http://localhost:8000/files?limit=50"
+
+# 删除文档
+curl -X DELETE http://localhost:8000/files/{file_id}
+
+# 查询（先提交再订阅 SSE 流）
+curl -X POST http://localhost:8001/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "万用表怎么测电压？", "session_id": "test-session-001"}'
+  -d '{"query": "万用表怎么测电压？", "session_id": "test-001", "is_stream": true}'
+
+# 订阅流式回答（用返回的 task_id）
+curl -N http://localhost:8001/stream/{task_id}
 
 # 查对话历史
-curl http://localhost:8001/history/test-session-001
+curl "http://localhost:8001/history/test-001?limit=20"
+```
+
+### 上传校验规则
+
+```
+请求到达
+  │
+  ├─ 1. 后缀校验：非 .pdf → 409 "只允许上传PDF文件"
+  ├─ 2. 存盘 + 计算 MD5
+  ├─ 3. 大小校验：< 1KB → 409 "文件小于1KB，拒绝上传"
+  ├─ 4. MD5 查重：已存在 → 409 "该文件已经上传过，禁止重复入库"
+  └─ 5. 存入 MinIO → 返回 task_id → 后台 LangGraph 解析
 ```
 
 ---
@@ -630,7 +756,7 @@ curl http://localhost:8001/history/test-session-001
 
 **解决**：在**项目根目录**下启动：
 ```powershell
-cd D:\PyCharm项目\shopkeeper_brain_1
+cd D:\pycharm_projects\shopkeeper_brain_plus
 .venv\Scripts\python.exe -m knowledge.api.import_router
 ```
 
@@ -675,13 +801,13 @@ cd D:\PyCharm项目\shopkeeper_brain_1
 
 **完整报错**：`DetectError: Failed to load FastText model: lid.176.ftz cannot be opened for loading!`
 
-**原因**：fasttext_pybind 的 C++ binding 无法处理包含中文的路径（如 `D:\PyCharm项目\...`）。
+**原因**：fasttext_pybind 的 C++ binding 无法处理包含中文的路径（如 `D:\pycharm_projects\...`）。
 
 **解决**：应用 `patches/sitecustomize.py`，启动时自动 copy 模型到 `C:\Temp\ftlang\lid.176.bin` 并 override 路径。
 
 ---
 
-### Q6：pip 报 Unable to create process using ...PyCharm??shopkeeper_brain_1
+### Q6：pip 报 Unable to create process using ...PyCharm??shopkeeper_brain_plus
 
 **原因**：venv 创建时 pip launcher 硬编码的路径在中文 `项目` 字符处编码错乱。
 
@@ -737,7 +863,116 @@ curl http://192.168.40.140:19530/healthz
 
 ### Q10：前端 SSE 进度不更新
 
-**排查**：打开浏览器 F12 Network 面板，看 `/import/task/{id}` 请求是否在持续接收事件。如果断了，看后端终端有没有 traceback。
+**排查**：打开浏览器 F12 Network 面板，看 `/status/{task_id}` 请求是否在持续接收事件。如果断了，看后端终端有没有 traceback。
+
+---
+
+## MinerU 设备模式
+
+MinerU（PDF → Markdown 解析引擎）支持 CPU / CUDA 两种推理模式，当前项目默认 **CPU 模式**。
+
+### 当前配置
+
+| 配置层 | 位置 | 值 |
+|--------|------|-----|
+| MinerU 系统配置 | `C:\Users\{用户名}\magic-pdf.json` | `"device-mode": "cpu"` |
+| 项目环境变量 | `.env` `MINERU_DEVICE_MODE` | `cpu` |
+| 代码兜底默认 | `nodes/pdf_to_md_node.py:42` | `env.setdefault("MINERU_DEVICE_MODE", "cpu")` |
+
+> **现状**：三层配置均指向 CPU，且代码层强制 `CUDA_VISIBLE_DEVICES=""`，确保 MinerU 子进程不加载 CUDA 库、不与主进程的 BGE-M3 GPU 推理冲突。
+
+### 切换到 GPU（CUDA）
+
+> ⚠️ **硬件限制**：RTX 4060 Laptop (8GB) 使用 CUDA 时，BGE-M3 + MinerU 模型同时加载易 OOM。切换前请评估风险。
+
+| 步骤 | 文件 | 操作 |
+|------|------|------|
+| 1 | `C:\Users\{用户名}\magic-pdf.json` | `"device-mode": "cpu"` → `"device-mode": "cuda"` |
+| 2 | `.env` 第 103 行 | `MINERU_DEVICE_MODE=cpu` → `MINERU_DEVICE_MODE=cuda` |
+| 3 | `.env` 第 107 行 | 取消注释 `CUDA_VISIBLE_DEVICES=0` |
+| 4 | `nodes/pdf_to_md_node.py` 第 41 行 | 注释掉 `env.setdefault("CUDA_VISIBLE_DEVICES", "")` |
+| 5 | — | 重启 8000 导入服务 |
+
+### 回退 CPU
+
+将所有修改反向操作：
+
+```bash
+MINERU_DEVICE_MODE=cpu              # .env
+#CUDA_VISIBLE_DEVICES=              # .env 注释掉
+```
+
+```jsonc
+{ "device-mode": "cpu" }            // magic-pdf.json
+```
+
+```python
+env.setdefault("CUDA_VISIBLE_DEVICES", "")  # pdf_to_md_node.py 恢复
+```
+
+---
+
+## E2E RAG 测试报告
+
+> 测试日期：2026-09-17 | 测试工具：[test_e2e.py](file:///D:/pycharm_projects/shopkeeper_brain_plus/test_e2e.py)
+
+### 测试环境
+
+| 项目 | 值 |
+|------|-----|
+| 导入服务 | `localhost:8000` |
+| 查询服务 | `localhost:8001` |
+| 测试 PDF | `docs/万用表的使用_origin.pdf` |
+| LLM | DashScope qwen-flash |
+| 向量模型 | BGE-M3 (本地, cuda:0, FP16) |
+| 向量库 | Milvus `kb_chunks_v1` / `kb_item_names_v1` |
+| 元数据库 | MongoDB |
+| 对象存储 | MinIO |
+
+### 测试结果（7/7 PASS）
+
+| # | 测试项 | 结果 | 关键现象 |
+|---|--------|------|----------|
+| 1 | Upload PDF 入库 | ✅ PASS | 8 节点全部完成：PDF→MD→切分(22 chunks)→主体识别("数字万用表")→向量化→入库, 总耗时 ~53s |
+| 2 | Query RAG 召回 | ✅ PASS | "万用表有什么功能？" → 1031 字答案，准确描述 DC/AC 电压、电流、电阻测量功能 |
+| 3 | 重复上传去重 | ✅ PASS | 同一 PDF 再次上传 → HTTP 409 + `"该文件已经上传过，禁止重复入库"`，chunks 保持 22 不变 |
+| 4 | 删除四层联动 | ✅ PASS | `milvus_chunks`: 22✅ / `milvus_item_names`: 1✅ / `mongo_record`: true✅ / `minio_object`: true✅ |
+| 5 | 删除后不可检索 | ✅ PASS | 再次提问 → `"很抱歉，在知识库中未找到与「万用表」相关的文档内容"` |
+
+### 测试过程发现并修复的问题
+
+| 严重等级 | 问题 | 修复方案 |
+|----------|------|----------|
+| 🔴 高 | `.env` BGE 模型路径残留旧路径，导致 item_name_recognition_node 模型加载崩溃 | 替换为新路径 + 重启 8000/8001 |
+| 🟡 中 | 服务进程缓存旧 `.env`，路径修复后未自动生效 | 手动 Kill + 重启服务 |
+
+---
+
+## 路径迁移记录
+
+> 旧路径：`D:\PyCharm项目\shopkeeper_brain_plus` → 新路径：`D:\pycharm_projects\shopkeeper_brain_plus`  
+> 迁移原因：PyCharm 旧项目名含中文 `项目` 字符，Windows 下 C 扩展路径解析异常。
+
+### 迁移涉及文件
+
+| 文件 | 替换处数 | 备注 |
+|------|----------|------|
+| `README.md` | 4 | 启动命令路径 |
+| `nodes/main_graph.py` | 0 | 已提前清理 |
+| `nodes/document_split_node.py` | 0 | 已提前清理 |
+| `nodes/embedding_chunks_node.py` | 1 | temp_dir 路径 |
+| `nodes/item_name_recognition_node.py` | 1 | temp_dir 路径 |
+| `nodes/md_to_img_node.py` | 0 | 已提前清理 |
+| `nodes/import_milvus_node.py` | 1 | temp_dir 路径 |
+| `nodes/entry_node.py` | 2 | 测试文件路径 + temp_dir |
+| `.env` | 2 | BGE-M3 和 BGE-Reranker 模型路径 |
+
+### ⚠️ 注意事项
+
+1. **`.env` 容易被遗漏**：之前的全局路径扫描遗漏了 `.env` 文件，因 Windows 反斜杠转义问题未命中。迁移后务必手工检查 `.env` 中的 `BGE_M3_PATH` 和 `BGE_RERANKER_LARGE`。
+2. **`magic-pdf.json`** 位于 `C:\Users\{用户名}\` 目录下，不在项目内，使用绝对路径，迁移时不受影响。
+3. **服务重启**：`.env` 修改后必须重启对应服务，进程不会自动感知环境变量变更。
+4. **`models/` 目录**：BGE 和 MinerU 模型均使用绝对路径配置，路径变更后需同步更新 `.env` 中的模型路径变量。
 
 ---
 

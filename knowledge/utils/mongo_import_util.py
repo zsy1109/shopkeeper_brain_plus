@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from datetime import datetime
@@ -14,6 +15,18 @@ def _get_collection():
     return StorageClients.get_mongo_db()[_COLLECTION_NAME]
 
 
+def find_duplicate_by_md5(filename: str, md5_hash: str) -> Optional[Dict[str, Any]]:
+    try:
+        doc = _get_collection().find_one({
+            "filename": filename,
+            "file_md5": md5_hash,
+        })
+        return doc
+    except Exception as e:
+        logger.error(f"[import_record] 查重查询失败: {e}")
+        return None
+
+
 def create_import_record(
         task_id: str,
         filename: str,
@@ -23,6 +36,7 @@ def create_import_record(
         status: str = "completed",
         minio_object_path: str = "",
         import_file_path: str = "",
+        file_md5: str = "",
 ) -> str:
     doc = {
         "task_id": task_id,
@@ -33,6 +47,7 @@ def create_import_record(
         "status": status,
         "minio_object_path": minio_object_path,
         "import_file_path": import_file_path,
+        "file_md5": file_md5,
         "import_time": datetime.now().timestamp(),
     }
     try:

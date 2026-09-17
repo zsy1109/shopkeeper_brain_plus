@@ -19,10 +19,10 @@ class WebMcpSearchNode(BaseNode):
             web_search_results = self._execute_mcp_server(rewritten_query)
         except Exception as e:
             self.logger.warning(f"web_mcp_search_node 执行失败: {e}")
-            return state
+            return {}
 
         if not web_search_results:
-            return state
+            return {}
 
         return {"web_search_docs": web_search_results}
 

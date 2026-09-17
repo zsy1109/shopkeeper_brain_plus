@@ -21,14 +21,14 @@ class HybridVectorSearch(BaseNode):
             bge_m3_client = AIClients.get_bge_m3_client()
         except ConnectionError as e:
             self.logger.error(f"BGE-M3嵌入模型获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         # 3. 获取Milvus客户端
         try:
             milvus_client = StorageClients.get_milvus_client()
         except ConnectionError as e:
             self.logger.error(f"Milvus客户端获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         # 4. 嵌入、检索
         try:
@@ -37,7 +37,7 @@ class HybridVectorSearch(BaseNode):
                                                                 embedding_documents=[rewritten_query])
         except Exception as e:
             self.logger.error(f"用户问题{rewritten_query}嵌入获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         try:
             # 4.2 创建混合检索请求(expr:对检索的返回做过滤的)
@@ -59,7 +59,7 @@ class HybridVectorSearch(BaseNode):
                                                             )
 
             if not hybrid_search_res or not hybrid_search_res[0]:
-                return state
+                return {}
 
             # 4.4 更新state
 
@@ -68,7 +68,7 @@ class HybridVectorSearch(BaseNode):
 
         except Exception as e:
             self.logger.error(f"用户问题{rewritten_query}执行混合搜索查询失败 原因:{str(e)}")
-            return state
+            return {}
 
     def _validate_state(self, state: QueryGraphState) -> Tuple[str, List[str]]:
         # 1. 用户的问题（LLM重写后的）

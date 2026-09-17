@@ -1,9 +1,13 @@
 import os.path
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, Depends, BackgroundTasks, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from knowledge.core.paths import get_front_page_dir
@@ -15,6 +19,12 @@ from knowledge.utils import mongo_import_util
 from knowledge.utils import milvus_util
 from knowledge.utils.client.storage_clients import StorageClients
 from knowledge.service import delete_service
+from knowledge.processor.import_processor.exceptions import FileProcessingError
+
+
+class UTF8JSONResponse(JSONResponse):
+    """自定义 JSONResponse，强制 media_type 携带 charset=utf-8"""
+    media_type = "application/json; charset=utf-8"
 
 
 # 1. 创建fastapi实例
@@ -31,7 +41,11 @@ def create_app():
     """
 
     # 1. 实例化
-    app = FastAPI(description="掌柜智库导入的应用", version="v1.0")
+    app = FastAPI(
+        description="掌柜智库导入的应用",
+        version="v1.0",
+        default_response_class=UTF8JSONResponse,
+    )
 
     # 2. 跨域配置
     app.add_middleware(
@@ -70,13 +84,16 @@ def register_router(app: FastAPI):
         上传文件的原始名字：万用表的使用.pdf
         Returns:
         """
-        # 1. 将上传的文件写入到本地临时目录以及远程MinIO
-        task_id, import_file_path, file_dir, minio_object_path = upload_service.process_upload_file(file)
+        # 1. 将上传的文件写入到本地临时目录以及远程MinIO（含MD5计算和查重）
+        try:
+            task_id, import_file_path, file_dir, minio_object_path, md5_hash = upload_service.process_upload_file(file)
+        except FileProcessingError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
         # 2. 运行整个导入的图谱(耗时：节点多【pdf解析很慢】)后台任务慢慢做
         background_tasks.add_task(
             upload_service.run_import_graph,
-            task_id, import_file_path, file_dir, minio_object_path,
+            task_id, import_file_path, file_dir, minio_object_path, md5_hash,
         )
 
         # 3. 返回上传后的响应（数据模型）
@@ -121,7 +138,7 @@ def register_router(app: FastAPI):
             raise HTTPException(status_code=404, detail=f"文件记录不存在 (file_id={file_id})")
 
         milvus_client = StorageClients.get_milvus_client()
-        collection_name = os.getenv("MILVUS_COLLECTION_NAME", "shopkeeper_brain_knowledge")
+        collection_name = os.getenv("CHUNKS_COLLECTION", "kb_chunks_v1")
         file_title = record.get("file_title", "")
         chunks = milvus_util.list_chunks_by_file_title(
             milvus_client, collection_name, file_title,
@@ -138,7 +155,10 @@ def register_router(app: FastAPI):
         """删除已导入文档（Milvus + Mongo + MinIO 三层清理）"""
         result = delete_service.delete_document(file_id)
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("message", "删除失败"))
+            raise HTTPException(
+                status_code=400,
+                detail=result.get("message", "删除失败"),
+            )
         return result
 
 

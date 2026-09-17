@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智问助手 · 知识库管理</title>
+    <title>掌柜智库·增强版 · 知识库管理</title>
     <style>
         :root{
             --bg-0:#0a0f1e;
@@ -333,7 +333,7 @@
                 </svg>
             </div>
             <div class="title">
-                <h1>智问助手</h1>
+                <h1>掌柜智库·增强版</h1>
                 <span>知识库管理 · 查看、预览与清理已入库文档</span>
             </div>
         </div>
@@ -393,11 +393,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API_BASE = (() => {
-    const p = location.port;
-    if (p === '8001') return 'http://localhost:8000';
-    return location.protocol + '//' + location.host;
-})();
+const API_BASE = (location.port === '8000' || location.hostname === 'localhost')
+  ? `${location.protocol}//${location.hostname}:8000`
+  : 'http://127.0.0.1:8000';
 
 let allFiles = [];
 let currentFilter = 'all';

@@ -1,16 +1,24 @@
 import asyncio
+import sys, os
 
-import uvicorn, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+import uvicorn
 from typing import Union
 from fastapi import FastAPI, UploadFile, Depends, BackgroundTasks, Request,HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from knowledge.core.paths import get_front_page_dir
 from knowledge.schema.query_schema import QueryRequest, StreamSubmitResponse, QueryResponse
 from knowledge.core.deps import get_query_service
 from knowledge.service.query_service import QueryService
 from knowledge.utils.sse_util import create_sse_queue, sse_generator
+
+
+class UTF8JSONResponse(JSONResponse):
+    """自定义 JSONResponse，强制 media_type 携带 charset=utf-8"""
+    media_type = "application/json; charset=utf-8"
 
 
 def create_app():
@@ -22,7 +30,11 @@ def create_app():
     """
 
     # 1. 实例化
-    app = FastAPI(description="掌柜智库查询的应用", version="v1.0")
+    app = FastAPI(
+        description="掌柜智库查询的应用",
+        version="v1.0",
+        default_response_class=UTF8JSONResponse,
+    )
 
     # 2. 跨域配置
     app.add_middleware(

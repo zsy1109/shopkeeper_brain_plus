@@ -126,7 +126,7 @@ if __name__ == '__main__':
     setup_logging()
 
     base_dir = Path(
-        r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir"
+        r"D:\pycharm_projects\shopkeeper_brain_plus\knowledge\processor\import_processor\temp_dir"
     )
     input_path = base_dir / "chunks_item_name.json"
     output_path = base_dir / "chunks_vector.json"

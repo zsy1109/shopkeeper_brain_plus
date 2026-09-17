@@ -1,3 +1,4 @@
+import hashlib
 import os
 import os.path
 import logging
@@ -31,7 +32,7 @@ class UpLoadService:
     处理文件上传相关的逻辑
     """
 
-    def run_import_graph(self, task_id: str, import_file_path: str, file_dir: str, minio_object_path: str = ""):
+    def run_import_graph(self, task_id: str, import_file_path: str, file_dir: str, minio_object_path: str = "", file_md5: str = ""):
         """
         运行整个图谱流程
         Args:
@@ -39,6 +40,7 @@ class UpLoadService:
             import_file_path:
             file_dir:
             minio_object_path:
+            file_md5:
 
         Returns:
 
@@ -53,7 +55,6 @@ class UpLoadService:
         }
 
         final_state: dict = {}
-        import_ok = False
         try:
             for event in get_import_graph().stream(graph_state):
                 for key, value in event.items():
@@ -61,32 +62,28 @@ class UpLoadService:
                     final_state = value
 
             update_task_status(task_id, TASK_STATUS_COMPLETED)
-            import_ok = True
+            self._write_import_record(
+                task_id=task_id,
+                import_file_path=import_file_path,
+                minio_object_path=minio_object_path,
+                final_state=final_state,
+                file_md5=file_md5,
+            )
         except Exception as e:
-            logger.error(f"[{task_id}] 执行导入过程中出现异常 原因{str(e)}")
+            logger.error(f"[{task_id}] 执行导入过程中出现异常 原因:{str(e)}")
             update_task_status(task_id, TASK_STATUS_FAILED)
-
-        self._write_import_record(
-            task_id=task_id,
-            import_file_path=import_file_path,
-            minio_object_path=minio_object_path,
-            final_state=final_state,
-            import_ok=import_ok,
-        )
 
     def _write_import_record(self,
                              task_id: str,
                              import_file_path: str,
                              minio_object_path: str,
                              final_state: dict,
-                             import_ok: bool):
+                             file_md5: str = ""):
         filename = os.path.basename(import_file_path)
         file_title = final_state.get("file_title", filename.rsplit(".", 1)[0] if "." in filename else filename)
         item_name = final_state.get("item_name", "")
         chunks = final_state.get("chunks", [])
         chunk_count = len(chunks) if isinstance(chunks, list) else 0
-
-        record_status = "completed" if import_ok else "failed"
 
         mongo_import_util.create_import_record(
             task_id=task_id,
@@ -94,18 +91,22 @@ class UpLoadService:
             file_title=file_title,
             item_name=item_name,
             chunk_count=chunk_count,
-            status=record_status,
+            status="completed",
             minio_object_path=minio_object_path,
             import_file_path=import_file_path,
+            file_md5=file_md5,
         )
 
     def process_upload_file(self, file: UploadFile):
         """
         处理文件上传
 
-        1. 将上传的文件存储到本地临时目录(主要为了做中转)
-        2. 将上传的文件存储到远程minio(主要持久化)
-        3. 将file_dir / import_file_path /task_id 返回
+        1. 校验文件后缀（仅 .pdf）
+        2. 将上传的文件存储到本地临时目录(主要为了做中转)，同时计算MD5
+        3. 校验文件大小（≥ 1KB）
+        4. 根据【文件MD5 + 文件名】查重，重复则拦截
+        5. 将上传的文件存储到远程minio(主要持久化)
+        6. 将file_dir / import_file_path / task_id / md5 返回
         Args:
             file:
 
@@ -113,9 +114,14 @@ class UpLoadService:
 
         """
 
-        # 1. 生成任务id
+        # ── 前置校验1：文件后缀 ──
+        filename = file.filename or ""
+        if not filename.lower().endswith('.pdf'):
+            logger.warning(f"[upload] 后缀拦截: {filename}")
+            raise FileProcessingError(message=f"只允许上传PDF文件，当前文件后缀不支持: {filename}")
 
-        task_id = str(uuid.uuid4().hex[:8])  # 真正的随机 获取前8个随机数
+        # 1. 生成任务id
+        task_id = str(uuid.uuid4().hex[:8])
         add_running_task(task_id, "upload_file")
         start_time = time.time()
 
@@ -125,26 +131,43 @@ class UpLoadService:
         # 3. 构建文档完整归属目录
         file_dir = os.path.join(base_file_dir, task_id)
 
-        # 4. 保存文件到临时目录
-        import_file_path = self.save_upload_file_to_local(file, file_dir)
+        # 4. 保存文件到临时目录（同时计算MD5）
+        import_file_path, md5_hash = self.save_upload_file_to_local(file, file_dir)
 
-        # 5. 保存文件到minio中
+        # ── 前置校验2：文件大小（≥ 1KB）──
+        file_size = os.path.getsize(import_file_path)
+        if file_size < 1024:
+            shutil.rmtree(file_dir, ignore_errors=True)
+            logger.warning(f"[upload] 大小拦截: {filename}, size={file_size}B")
+            raise FileProcessingError(message=f"文件小于1KB，拒绝上传 (当前: {file_size}B)")
+
+        # 5. 查重：根据【文件MD5 + 文件名】查询 MongoDB
+        filename = os.path.basename(import_file_path)
+        duplicate = mongo_import_util.find_duplicate_by_md5(filename, md5_hash)
+        if duplicate:
+            shutil.rmtree(file_dir, ignore_errors=True)
+            logger.warning(f"[upload] 重复文件拦截: {filename}, MD5={md5_hash}, 已存在_id={duplicate.get('_id')}")
+            raise FileProcessingError(message=f"该文件已经上传过，禁止重复入库")
+
+        # 6. 保存文件到minio中
         minio_object_path = self.save_upload_file_to_minio(import_file_path, file.filename)
         end_time = time.time()
         add_done_task(task_id, "upload_file")
         add_node_duration(task_id, "upload_file", end_time - start_time)
 
-        # 6. 返回图谱的信息
-        return task_id, import_file_path, file_dir, minio_object_path
+        # 7. 返回图谱的信息
+        return task_id, import_file_path, file_dir, minio_object_path, md5_hash
 
-    def save_upload_file_to_local(self, file: UploadFile, file_dir: str) -> str:
+    def save_upload_file_to_local(self, file: UploadFile, file_dir: str):
         """
-        保存文件到临时目录
+        保存文件到临时目录，同时计算 MD5
+
         Args:
             file: 文件上传对象
             file_dir: 上传文件的目录
 
         Returns:
+            (import_file_path, md5_hash)
 
         """
         # 1. 创建文件的归属目录
@@ -153,17 +176,25 @@ class UpLoadService:
         # 2. 构建导入文件的路径
         import_file_path = os.path.join(file_dir, file.filename)
 
-        # 3. 写入
+        # 3. 边写边算 MD5
+        md5 = hashlib.md5()
         try:
-            with  open(import_file_path, "wb") as f:
-                # shutil.copyfileobj() 不同的操作系统以及不同python版本都可以分批次的写入（windows版本以及3.7以上的sdk版本:1m）
-                shutil.copyfileobj(file.file, f)
+            with open(import_file_path, "wb") as f:
+                while True:
+                    chunk = file.file.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    md5.update(chunk)
         except IOError as e:
             logger.info(f"{file.filename}写入临时目录失败 原因:{str(e)}")
             raise FileProcessingError(message=f"{file.filename}写入临时目录失败 原因:{str(e)}")
 
-        # 4. 返回导入的文件路径
-        return import_file_path
+        md5_hash = md5.hexdigest()
+        logger.info(f"[upload] {file.filename} 写入完成, MD5={md5_hash}")
+
+        # 4. 返回导入的文件路径和md5
+        return import_file_path, md5_hash
 
     def save_upload_file_to_minio(self, import_file_path: str, filename: str) -> str:
         """

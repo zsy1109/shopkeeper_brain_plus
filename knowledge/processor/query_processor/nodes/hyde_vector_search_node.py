@@ -24,28 +24,28 @@ class HyDeVectorSearchNode(BaseNode):
 
         # 3. 判断
         if hy_document is None:
-            return state
+            return {}
 
         # 4. 获取嵌入模型以及milvus客户端
         try:
             bge_m3_client = AIClients.get_bge_m3_client()
         except ConnectionError as e:
             self.logger.error(f"BGE-M3嵌入模型获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         # 5. 获取Milvus客户端
         try:
             milvus_client = StorageClients.get_milvus_client()
         except ConnectionError as e:
             self.logger.error(f"Milvus客户端获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         # 6. 为假设性文档嵌入
         try:
             embed_hy_vector = generate_bge_m3_hybrid_vectors(bge_m3_client, [f"{rewritten_query}\n{hy_document}"])
         except Exception as e:
             self.logger.error(f"假设性文档{hy_document}嵌入获取失败 原因:{str(e)}")
-            return state
+            return {}
 
         # 7. 向量检索
         try:
@@ -68,7 +68,7 @@ class HyDeVectorSearchNode(BaseNode):
                                                             )
 
             if not hybrid_search_res or not hybrid_search_res[0]:
-                return state
+                return {}
 
 
             # 7.3 修改自己的并且返回修改后的
@@ -77,7 +77,7 @@ class HyDeVectorSearchNode(BaseNode):
         except Exception as e:
             self.logger.error(
                 f"原始问题{rewritten_query}对应的假设性文档{hy_document}执行混合搜索查询失败 原因:{str(e)}")
-            return state
+            return {}
 
     def _validate_state(self, state: QueryGraphState) -> Tuple[str, List[str]]:
         # 1. 用户的问题（LLM重写后的）

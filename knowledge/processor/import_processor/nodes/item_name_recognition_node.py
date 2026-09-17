@@ -223,17 +223,28 @@ class ItemNameRecognitionNode(BaseNode):
             if not milvus_client.has_collection(item_name_collection_name):
                 self._create_item_name_collection(item_name_collection_name, milvus_client)
 
-            # 6. 构建数据行
+            # 6. 幂等校验：同 file_title + item_name 已存在则跳过
+            existing = milvus_client.query(
+                collection_name=item_name_collection_name,
+                filter=f'file_title == "{file_title}" and item_name == "{item_name}"',
+                output_fields=["pk"],
+                limit=1,
+            )
+            if existing:
+                self.logger.info(f"商品名已存在，跳过插入: file_title={file_title}, item_name={item_name}")
+                return
+
+            # 7. 构建数据行并插入
             item_name_data_row = {
                 "file_title": file_title,
                 "item_name": item_name,
                 "dense_vector": dense_vector,
                 "sparse_vector": sparse_vector
             }
-            # 7. 插入数据
             inserted_result = milvus_client.insert(collection_name=item_name_collection_name, data=[item_name_data_row])
         except Exception as e:
             self.logger.error(f"商品名{item_name}插入失败 {str(e)}")
+            return
 
         self.logger.info(f"插入的结果:{inserted_result},主键值:{inserted_result.get('ids')}")
 
@@ -308,7 +319,7 @@ if __name__ == '__main__':
 
     # 1. 读取chunk.json
     temp_dir = Path(
-        r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir")
+        r"D:\pycharm_projects\shopkeeper_brain_plus\knowledge\processor\import_processor\temp_dir")
 
     chunk_json_path = temp_dir / "chunks.json"
     output_path = temp_dir / "chunks_item_name.json"

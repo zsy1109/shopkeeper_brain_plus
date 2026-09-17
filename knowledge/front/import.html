@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>智问助手 · 文件导入</title>
+    <title>掌柜智库·增强版 · 文件导入</title>
     <style>
         :root{
             --bg-0:#0a0f1e;
@@ -446,7 +446,7 @@
             </svg>
         </div>
         <div class="title">
-            <h1>智问助手</h1>
+            <h1>掌柜智库·增强版</h1>
             <span>文件导入 · 上传 PDF 或 Markdown 文档，自动解析入库</span>
         </div>
         <div class="nav-tabs">
@@ -494,7 +494,9 @@
     const fileList = document.getElementById('fileList');
     const listTitle = document.getElementById('listTitle');
 
-    const API_BASE = `${location.protocol}//${location.host}`.includes('http') ? `${location.protocol}//${location.host}` : 'http://127.0.0.1:8000';
+    const API_BASE = (location.port === '8000' || location.hostname === 'localhost')
+      ? `${location.protocol}//${location.hostname}:8000`
+      : 'http://127.0.0.1:8000';
 
     dropZone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -504,6 +506,10 @@
     dropZone.addEventListener('dragleave', (e) => {
         e.preventDefault();
         dropZone.classList.remove('dragover');
+    });
+
+    dropZone.addEventListener('click', () => {
+        fileInput.click();
     });
 
     dropZone.addEventListener('drop', (e) => {

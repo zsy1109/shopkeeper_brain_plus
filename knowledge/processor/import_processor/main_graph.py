@@ -121,8 +121,8 @@ def run_import_graph():
     # 1. 定义运行graph流程的状态
 
     graph_state = {
-        "import_file_path": r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir\万用表的使用.pdf",
-        "file_dir": r"D:\PyCharm项目\shopkeeper_brain_1\knowledge\processor\import_processor\temp_dir"
+        "import_file_path": r"D:\pycharm_projects\shopkeeper_brain_plus\knowledge\processor\import_processor\temp_dir\万用表的使用.pdf",
+        "file_dir": r"D:\pycharm_projects\shopkeeper_brain_plus\knowledge\processor\import_processor\temp_dir"
 
     }
 

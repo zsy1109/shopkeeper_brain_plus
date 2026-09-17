@@ -102,6 +102,12 @@ def execute_hybrid_search_query(milvus_client: MilvusClient,
         raise ValueError("search_requests 不能为 None 或空列表")
 
     try:
+        # 确保集合已加载到内存（服务重启后需要重新加载）
+        try:
+            milvus_client.load_collection(collection_name)
+        except Exception:
+            pass
+
         # 创建权重融合排序器
         rerank = WeightedRanker(ranker_weights[0], ranker_weights[1], norm_score=norm_score)
 
@@ -128,9 +134,32 @@ def execute_hybrid_search_query(milvus_client: MilvusClient,
 
 
 def _item_names_filter(item_names: List[str]) -> Tuple[str, Dict[str, Any]]:
-    expr = "item_name in {item_names}"
-    expr_params = {"item_names": item_names}
-    return expr, expr_params
+    """
+    根据 item_name 列表构建 Milvus filter 表达式。
+
+    同时做子串模糊匹配兜底：当精确值在 Milvus 中不存在时
+    （例如用户说"万用表"，但实际 item_name 是"RS-12 数字万用表"），
+    也能匹配到包含该子串的文档。
+
+    Milvus 不支持 contains 语法，所以用 OR 链实现：
+      expr = '(item_name in [...] or item_name like "%万用表%")'
+    """
+    if not item_names:
+        return "", {}
+
+    exact_expr = "item_name in {item_names}"
+    exact_params = {"item_names": item_names}
+
+    like_clauses = []
+    for name in item_names:
+        if len(name) >= 2:
+            like_clauses.append(f'item_name like "%{name}%"')
+
+    if like_clauses:
+        full_expr = f'({exact_expr} or {" or ".join(like_clauses)})'
+        return full_expr, exact_params
+
+    return exact_expr, exact_params
 
 
 def count_by_file_title(milvus_client: MilvusClient,
@@ -169,14 +198,21 @@ def list_chunks_by_file_title(milvus_client: MilvusClient,
 
 def delete_by_file_title(milvus_client: MilvusClient,
                          collection_name: str,
-                         file_title: str) -> bool:
+                         file_title: str) -> int:
+    """
+    按 file_title 删除 collection 中的全部记录
+
+    Returns:
+        删除的记录数量；异常时返回 -1
+    """
     try:
-        milvus_client.delete(
+        result = milvus_client.delete(
             collection_name=collection_name,
             filter=f'file_title == "{file_title}"',
         )
-        logger.info(f"[milvus] 已删除 file_title={file_title} 的所有 chunks")
-        return True
+        delete_count = result.get("delete_count", 0) if isinstance(result, dict) else 0
+        logger.info(f"[milvus] 已从 {collection_name} 删除 file_title={file_title} 的 {delete_count} 条记录")
+        return delete_count
     except Exception as e:
-        logger.error(f"[milvus] delete_by_file_title 失败: {e}")
-        return False
+        logger.error(f"[milvus] delete_by_file_title 失败 collection={collection_name} file_title={file_title}: {e}")
+        return -1

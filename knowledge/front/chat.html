@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>智问助手 · 智能问答</title>
+  <title>掌柜智库·增强版 · 智能问答</title>
   <style>
     :root{
       --bg-0:#0a0f1e;
@@ -386,7 +386,7 @@
           </svg>
         </div>
         <div class="title">
-          <strong>智问助手</strong>
+          <strong>掌柜智库·增强版</strong>
           <span><span class="dot-live"></span>在线 · 可查询知识库与联网信息</span>
         </div>
       </div>
@@ -425,7 +425,7 @@
           </svg>
         </div>
         <div>
-          <div class="bubble">你好，我是智问助手 🤖
+          <div class="bubble">你好，我是掌柜智库·增强版 🤖
 我可以帮你检索知识库文档，也能联网搜索最新信息。试试直接提问吧~</div>
           <div class="meta">提示：可以问「如何使用万用表测量电压？」</div>
         </div>
@@ -453,7 +453,9 @@
   </div>
 
   <script>
-    const API_BASE = `${location.protocol}//${location.host}`.includes('http') ? `${location.protocol}//${location.host}` : 'http://127.0.0.1:8001';
+    const API_BASE = (location.port === '8001' || location.hostname === 'localhost')
+      ? `${location.protocol}//${location.hostname}:8001`
+      : 'http://127.0.0.1:8001';
     const chatEl = document.getElementById('chat');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');

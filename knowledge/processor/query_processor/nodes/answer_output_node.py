@@ -183,6 +183,32 @@ class AnswerOutPutNode(BaseNode):
         Returns:
 
         """
+        # 兜底：知识库没有检索到任何内容时，不调用LLM，直接返回友好提示
+        # 检查核心知识库路径（embedding/RRF），排除web搜索
+        embedding_chunks = state.get('embedding_chunks') or []
+        rrf_chunks = state.get('rrf_chunks') or []
+        hyde_chunks = state.get('hyde_embedding_chunks') or []
+        item_names = state.get('item_names') or []
+
+        has_kb_results = len(embedding_chunks) > 0 or len(rrf_chunks) > 0 or len(hyde_chunks) > 0
+
+        if not has_kb_results:
+            if item_names:
+                state['answer'] = (
+                    f"很抱歉，在知识库中未找到与「{'、'.join(item_names)}」相关的文档内容。\n"
+                    f"可能原因：\n"
+                    f"1. 该产品尚未导入知识库\n"
+                    f"2. 产品名称与知识库记录不一致\n"
+                    f"建议：请确认产品名称是否正确，或联系管理员上传相关文档。"
+                )
+            else:
+                state['answer'] = (
+                    "很抱歉，未找到与您问题相关的资料。\n"
+                    "建议：请提供更具体的产品名称或问题描述，以便我为您检索相关信息。"
+                )
+            if not state.get('is_stream'):
+                set_task_result(task_id=task_id, key="answer", value=state['answer'])
+            return
 
         use_agent = getattr(self.config, "enable_agent_mode", False)
         if use_agent:
@@ -205,6 +231,21 @@ class AnswerOutPutNode(BaseNode):
         else:
             state['answer'] = self._invoke_llm(prompt, llm_client)
             set_task_result(task_id=task_id, key="answer", value=state['answer'])
+
+        # 兜底：LLM返回空答案时提供友好提示
+        if not state.get('answer') or not state['answer'].strip():
+            item_names = state.get('item_names') or []
+            if item_names:
+                state['answer'] = (
+                    f"很抱歉，关于「{'、'.join(item_names)}」的相关资料中"
+                    f"暂未找到与您问题完全匹配的内容。\n"
+                    f"建议您：\n"
+                    f"1. 换一种更具体的方式提问\n"
+                    f"2. 确认产品名称是否准确\n"
+                    f"3. 联系管理员补充相关文档"
+                )
+            else:
+                state['answer'] = "很抱歉，未找到与您问题相关的资料，请提供更详细的信息。"
 
     def _generate_answer_with_agent(self, task_id: str, state: QueryGraphState):
         """使用 ReAct Agent（多轮 Tool Calling）生成答案。"""
