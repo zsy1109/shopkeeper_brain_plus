@@ -91,3 +91,5 @@ patches/
 
 # ===== 根目录临时文件（非 knowledge/ 下的 requirements.txt） =====
 /requirements.txt
+# ===== 日志文件 =====
+*.log
