@@ -71,15 +71,18 @@
 ## 核心特性
 
 - **双通道架构**：文档导入流水线 + 查询回答流水线，由 LangGraph 状态机编排
-- **多层上传校验**：后缀白名单（仅 .pdf）→ 文件大小检查（≥ 1KB）→ MD5 内容查重，三层防御
+- **四层上传校验**：后缀白名单（仅 .pdf）→ 0 字节拦截 → PDF 完整性检测（损坏/加密/空页）→ MD5 内容查重，四层防御
+- **知识库绝对优先隔离**：ReAct Agent 强制先查本地 KB，仅当 KB 无相关内容才联网；输出标注【知识库原文】/【网络补充信息】；冲突时以 PDF 文档为准；禁止编造
 - **健壮错误处理**：校验失败 / 解析异常 / 入库错误全过程 try-except，自动清理临时文件和 MongoDB 记录，不留孤儿数据
 - **混合检索**：Dense（向量）+ Sparse（BM25 关键词）+ HyDE 三路召回，RRF 融合排序
 - **商品名智能识别**：专有的商品名实体识别节点，支持多候选确认
 - **BGE Reranker 重排**：召回后二次精排，显著提升答案相关性
-- **ReAct Agent 模式**：可选的多轮工具调用，支持 MCP DashScope 联网搜索
+- **ReAct Agent 模式**：多轮工具调用，知识库优先、联网为辅，来源可追溯
 - **SSE 流式输出**：查询结果和导入进度实时推送
 - **子进程隔离**：MinerU 解析在独立 OS 子进程中运行，C 扩展崩溃不影响主服务
 - **四层联动删除**：DELETE 接口一键清理 MongoDB 元数据 → Milvus 文档切片向量(`kb_chunks_v1`) → Milvus 商品名向量(`kb_item_names_v1`) → MinIO 图片对象，四层同步删除，保证数据一致性
+- **孤儿数据清理脚本**：`clean_orphan_data.py` 双向检测 MongoDB ↔ Milvus 一致性，支持 `--dry-run` 预览和 `--execute` 执行
+- **历史 MD5 回填脚本**：`backfill_md5.py` 为已入库文档批量补算 MD5，实现零停机迁移
 - **全链路可观测**：任务状态追踪、耗时统计、历史记录持久化
 - **项目重构优化**：完成项目整体代码重构与路径解耦，支持项目目录重命名，修复虚拟环境中文路径兼容性问题，提升项目可移植性。
 
@@ -114,9 +117,10 @@
 ```
 HTTP 请求
   → 后缀校验(.pdf 白名单)
+  → 0 字节拦截(空文件拒绝)
+  → PDF 完整性检测(损坏/加密/空页拦截)
   → 存盘并计算 MD5
-  → 大小校验(≥ 1KB)
-  → MD5 查重(MongoDB)
+  → MD5 查重(MongoDB file_md5)
   → MinIO 持久化
   → 返回 task_id（以上同步完成）
   ─────────────────────────────
@@ -126,7 +130,7 @@ HTTP 请求
                 → item_name_recognition_node(qwen-flash 识别商品名)
                 → embedding_chunks_node(BGE-M3 GPU 混合 embedding)
                 → import_milvus_node(写入 Milvus + MongoDB)
-  成功 → 写 MongoDB import_record
+  成功 → 写 MongoDB import_record（含 file_md5）
   失败 → 不残留任何记录
 ```
 
@@ -135,15 +139,35 @@ HTTP 请求
 ```
 用户查询
   → item_name_confirmed_node(qwen-flash 提取商品名，模糊时反问)
-  → multi_search（并行分发）
+  → multi_search（并行分发 — KB 与 Web 双路）
     ├── hybrid_vector_search_node(Milvus 混合检索)
-    ├── hyde_vector_search_node(LLM 假设性答案 → 向量检索)
-    └── web_mcp_search_node(DashScope Web Search MCP 联网)
+    └── hyde_vector_search_node(LLM 假设性答案 → 向量检索)
   → join → rrf_merge_node(RRF 倒数排名融合)
   → reranker_node(BGE-Reranker-Large GPU 精排)
-  → answer_output_node(qwen-flash 生成最终回答)
-  → SSE 流式返回前端
+  ─────────────────────────────
+  两条路径（二选一）：
+  ┌──────────────────────────────────────────────┐
+  │ 非 Agent 路径（默认）                           │
+  │ → answer_output_node(qwen-flash 基于 KB 生成)   │
+  │ → SSE 流式返回                                 │
+  ├──────────────────────────────────────────────┤
+  │ Agent 路径（enable_agent=true）                 │
+  │ → ReAct 多轮 Tool Calling：                     │
+  │   第 1 轮：必调 search_knowledge_base            │
+  │   第 2 轮：仅当 KB 无结果时才调 search_web       │
+  │ → answer_output_node(qwen-flash 生成，标注来源)  │
+  │ → SSE 流式返回                                 │
+  └──────────────────────────────────────────────┘
 ```
+
+**Agent 铁律**（`AGENT_SYSTEM_PROMPT` 强制约束）：
+
+| 规则 | 说明 |
+|------|------|
+| 知识库绝对优先 | 必须先调 `search_knowledge_base`，禁止第一轮直接联网 |
+| 来源可追溯 | 每条事实标注 `【知识库原文】` 或 `【网络补充信息】` |
+| 冲突以 KB 为准 | 本地文档 vs 网络矛盾时，强制采信 PDF 文档内容 |
+| 零幻觉 | 禁止编造 KB 和网络都没有的内容 |
 
 ### 核心设计模式
 
@@ -251,7 +275,7 @@ shopkeeper_brain_plus/
 │   │   │   ├── state.py                #   TypedDict 状态
 │   │   │   ├── base.py                 #   BaseNode 基类
 │   │   │   ├── config.py               #   导入配置
-│   │   │   ├── exceptions.py           #   导入异常
+│   │   │   ├── exceptions.py           #   导入异常（含 FileValidationError）
 │   │   │   └── nodes/                  #   7 个处理节点（详见工作流章节）
 │   │   │
 │   │   └── query_processor/            #   【查询工作流】
@@ -287,6 +311,16 @@ shopkeeper_brain_plus/
 │   │
 │   └── requirements.txt
 │
+│   ├── scripts/                         # 运维脚本
+│   │   └── backfill_md5.py             #   历史文档 MD5 批量回填（零停机）
+│   │
+│   └── test/                            # 自测脚本
+│       └── import/
+│           ├── test_dedup.py            #   MD5 查重验证
+│           ├── test_dedup_e2e.py        #   MD5 查重端到端
+│           ├── test_validation.py       #   上传校验（空/损坏/加密 PDF）
+│           └── test_isolation.py        #   知识库与网络隔离验证
+│
 ├── patches/                            # ★ 兼容补丁（见"应用补丁"章节）
 │   ├── sitecustomize.py                #   Transformers + FastText 全局补丁
 │   └── mineru_patch/                   #   MinerU ONNX 强制 CPU
@@ -298,6 +332,7 @@ shopkeeper_brain_plus/
 │       └── BAAI--bge-reranker-large/
 │
 ├── check_all_storage.py                # 三端数据巡检脚本（MongoDB / Milvus / MinIO）
+├── clean_orphan_data.py                # ★ 孤儿数据清理（--dry-run / --execute）
 ├── docs/                               # 示例 PDF 文件
 └── data/tmp/                           # MinerU 临时输出（已在 gitignore）
 ```
@@ -700,12 +735,21 @@ curl "http://localhost:8001/history/test-001?limit=20"
 ```
 请求到达
   │
-  ├─ 1. 后缀校验：非 .pdf → 409 "只允许上传PDF文件"
-  ├─ 2. 存盘 + 计算 MD5
-  ├─ 3. 大小校验：< 1KB → 409 "文件小于1KB，拒绝上传"
-  ├─ 4. MD5 查重：已存在 → 409 "该文件已经上传过，禁止重复入库"
-  └─ 5. 存入 MinIO → 返回 task_id → 后台 LangGraph 解析
+  ├─ 1. 后缀校验：非 .pdf → 400 "只允许上传 PDF 文件"
+  ├─ 2. 空文件拦截：0 字节 → 400 "文件内容为空（0 字节）"
+  ├─ 3. PDF 完整性检测：
+  │     ├─ 加密 → 400 "PDF 文件已加密，无法解析内容"
+  │     ├─ 损坏 → 400 "PDF 文件已损坏，无法正常打开"
+  │     └─ 空页 → 400 "PDF 文件无有效页面内容"
+  ├─ 4. 存盘 + 计算 MD5
+  ├─ 5. MD5 查重：已存在 → 409 "该文档已上传至知识库，请勿重复上传"
+  └─ 6. 存入 MinIO → 返回 task_id → 后台 LangGraph 解析
 ```
+
+| HTTP 状态码 | 场景 |
+|:----------:|------|
+| **400** | 后缀不符 / 空文件 / PDF 损坏/加密 |
+| **409** | MD5 已存在（重复文件） |
 
 ---
 
@@ -929,15 +973,22 @@ env.setdefault("CUDA_VISIBLE_DEVICES", "")  # pdf_to_md_node.py 恢复
 | 元数据库 | MongoDB |
 | 对象存储 | MinIO |
 
-### 测试结果（7/7 PASS）
+### 测试结果（12/12 PASS）
 
 | # | 测试项 | 结果 | 关键现象 |
 |---|--------|------|----------|
 | 1 | Upload PDF 入库 | ✅ PASS | 8 节点全部完成：PDF→MD→切分(22 chunks)→主体识别("数字万用表")→向量化→入库, 总耗时 ~53s |
 | 2 | Query RAG 召回 | ✅ PASS | "万用表有什么功能？" → 1031 字答案，准确描述 DC/AC 电压、电流、电阻测量功能 |
-| 3 | 重复上传去重 | ✅ PASS | 同一 PDF 再次上传 → HTTP 409 + `"该文件已经上传过，禁止重复入库"`，chunks 保持 22 不变 |
+| 3 | 重复上传去重 | ✅ PASS | 同一 PDF 再次上传 → HTTP 409 + `"该文档已上传至知识库，请勿重复上传"`，chunks 保持 22 不变 |
 | 4 | 删除四层联动 | ✅ PASS | `milvus_chunks`: 22✅ / `milvus_item_names`: 1✅ / `mongo_record`: true✅ / `minio_object`: true✅ |
 | 5 | 删除后不可检索 | ✅ PASS | 再次提问 → `"很抱歉，在知识库中未找到与「万用表」相关的文档内容"` |
+| 6 | **空文件拦截** | ✅ PASS | 0 字节 .txt → HTTP 400 + `"只允许上传 PDF 文件"` |
+| 7 | **损坏 PDF 拦截** | ✅ PASS | 无内容的伪 PDF → HTTP 400 + `"PDF 文件已损坏，无法正常打开"` |
+| 8 | **加密 PDF 拦截** | ✅ PASS | pypdf 加密 PDF → HTTP 400 + `"PDF 文件已加密，无法解析内容"` |
+| 9 | **KB 优先隔离** | ✅ PASS | 问题在 KB 有答案 → 仅引用【知识库原文】，Agent 未调用 search_web |
+| 10 | **KB 无结果联网** | ✅ PASS | KB 无价格信息 → 明确标注"知识库未涵盖" + 【网络补充信息】价格区间 |
+| 11 | **冲突以 KB 为准** | ✅ PASS | Agent 正确采信 KB 规格参数，未被网络内容覆盖 |
+| 12 | **孤儿清理脚本** | ✅ PASS | `--dry-run` 预览 0 孤儿 / `--execute` 执行 0 清理 / 二次验证一致 |
 
 ### 测试过程发现并修复的问题
 
