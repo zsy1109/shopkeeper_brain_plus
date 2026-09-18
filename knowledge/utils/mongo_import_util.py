@@ -15,10 +15,9 @@ def _get_collection():
     return StorageClients.get_mongo_db()[_COLLECTION_NAME]
 
 
-def find_duplicate_by_md5(filename: str, md5_hash: str) -> Optional[Dict[str, Any]]:
+def find_duplicate_by_md5(md5_hash: str) -> Optional[Dict[str, Any]]:
     try:
         doc = _get_collection().find_one({
-            "filename": filename,
             "file_md5": md5_hash,
         })
         return doc

@@ -37,28 +37,59 @@ class ReActAgent:
         self._tool_schemas = [t.tools_json_schema() for t in tools]
         self._max_turns = max_turns
         self._system_prompt = system_prompt
+        self._steps: List[Dict[str, Any]] = []
+
+    def get_steps(self) -> List[Dict[str, Any]]:
+        """获取 Agent 推理步骤记录。
+
+        Returns:
+            每轮步骤的列表，每项包含 turn/thought/actions。
+        """
+        return self._steps
 
     def invoke(self, user_query: str, context: str = "", item_names: str = "") -> str:
+        self._steps = []
         messages = self._build_initial_messages(user_query, context, item_names)
         final_text = ""
 
         for turn in range(self._max_turns):
+            step = {"turn": turn + 1, "thought": "", "actions": []}
+
+            logger.info(f"{'='*60}")
+            logger.info(f"[Agent 第 {turn + 1}/{self._max_turns} 轮]")
+            logger.info(f"{'='*60}")
+
             llm_msg, tool_calls = self._call_llm(messages)
+
+            if llm_msg:
+                logger.info(f"💭 Thought (思考): {llm_msg[:300]}{'...' if len(llm_msg) > 300 else ''}")
+                step["thought"] = llm_msg
 
             if tool_calls is None:
                 final_text = llm_msg or ""
+                logger.info(f"✅ Agent 完成，返回最终答案")
+                self._steps.append(step)
                 break
 
+            logger.info(f"🔧 本轮计划调用 {len(tool_calls)} 个工具")
             messages.append({"role": "assistant", "content": llm_msg, "tool_calls": tool_calls})
 
             tool_results = self._execute_tool_calls(tool_calls)
-            for tc_id, tool_name, result_text in tool_results:
+            for tc_id, tool_name, result_text, args in tool_results:
+                action_entry = {
+                    "tool": tool_name,
+                    "args": json.dumps(args, ensure_ascii=False),
+                    "observation": result_text[:500] if len(result_text) > 500 else result_text,
+                }
+                step["actions"].append(action_entry)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "name": tool_name,
                     "content": result_text,
                 })
+
+            self._steps.append(step)
         else:
             logger.warning("Agent 达到最大轮次限制")
             final_text = messages[-1].get("content", "") if messages else ""
@@ -66,30 +97,65 @@ class ReActAgent:
         return final_text or "Agent 暂无法生成答案"
 
     def stream(
-        self, user_query: str, context: str = "", item_names: str = ""
+        self, user_query: str, context: str = "", item_names: str = "",
+        on_step: Callable[[Dict[str, Any]], None] = None
     ) -> Generator[str, None, None]:
-        """流式调用 Agent，yield 增量文本。"""
+        """流式调用 Agent，yield 增量文本。
+
+        Args:
+            user_query: 用户查询。
+            context: 知识库上下文。
+            item_names: 商品名称。
+            on_step: 可选回调，每轮推理完成后调用，传入步骤字典。
+        """
+        self._steps = []
         messages = self._build_initial_messages(user_query, context, item_names)
 
         for turn in range(self._max_turns):
+            step = {"turn": turn + 1, "thought": "", "actions": []}
+
+            logger.info(f"{'='*60}")
+            logger.info(f"[Agent 第 {turn + 1}/{self._max_turns} 轮 - 流式]")
+            logger.info(f"{'='*60}")
+
             llm_msg, tool_calls = self._call_llm_stream(messages)
 
             if tool_calls is None:
+                thought = "".join(llm_msg)
+                logger.info(f"💭 Thought (思考): {thought[:300]}{'...' if len(thought) > 300 else ''}")
+                logger.info(f"✅ Agent 完成，返回最终答案")
+                step["thought"] = thought
+                self._steps.append(step)
+                if on_step:
+                    on_step(step)
                 for delta in llm_msg:
                     yield delta
                 break
 
             full_content = "".join(llm_msg)
+            logger.info(f"💭 Thought (思考): {full_content[:300]}{'...' if len(full_content) > 300 else ''}")
+            step["thought"] = full_content
+            logger.info(f"🔧 本轮计划调用 {len(tool_calls)} 个工具")
             messages.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
 
             tool_results = self._execute_tool_calls(tool_calls)
-            for tc_id, tool_name, result_text in tool_results:
+            for tc_id, tool_name, result_text, args in tool_results:
+                action_entry = {
+                    "tool": tool_name,
+                    "args": json.dumps(args, ensure_ascii=False),
+                    "observation": result_text[:500] if len(result_text) > 500 else result_text,
+                }
+                step["actions"].append(action_entry)
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc_id,
                     "name": tool_name,
                     "content": result_text,
                 })
+
+            self._steps.append(step)
+            if on_step:
+                on_step(step)
         else:
             logger.warning("Agent 达到最大轮次限制")
 
@@ -234,8 +300,8 @@ class ReActAgent:
 
     def _execute_tool_calls(
         self, tool_calls: List[Dict[str, Any]]
-    ) -> List[Tuple[str, str, str]]:
-        """执行一组 tool_calls，返回 [(tool_call_id, tool_name, result_text)]。"""
+    ) -> List[Tuple[str, str, str, Dict[str, Any]]]:
+        """执行一组 tool_calls，返回 [(tool_call_id, tool_name, result_text, args_dict)]。"""
         results = []
         for tc in tool_calls:
             tc_id = tc.get("id", "")
@@ -245,7 +311,7 @@ class ReActAgent:
 
             tool = self._tools.get(tool_name)
             if not tool:
-                results.append((tc_id, tool_name, json.dumps({"error": f"未知工具: {tool_name}"}, ensure_ascii=False)))
+                results.append((tc_id, tool_name, json.dumps({"error": f"未知工具: {tool_name}"}, ensure_ascii=False), {}))
                 continue
 
             try:
@@ -253,8 +319,10 @@ class ReActAgent:
             except JSONDecodeError:
                 args = {}
 
-            logger.info(f"Agent 调用工具 {tool_name}({args})")
+            logger.info(f"🔧 Action: 调用工具 {tool_name}({json.dumps(args, ensure_ascii=False)})")
             result_text = tool.safe_run(**args)
-            results.append((tc_id, tool_name, result_text))
+            obs_preview = result_text[:500] if len(result_text) > 500 else result_text
+            logger.info(f"📋 Observation (结果): {obs_preview}{'...' if len(result_text) > 500 else ''}")
+            results.append((tc_id, tool_name, result_text, args))
 
         return results

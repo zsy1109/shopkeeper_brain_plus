@@ -8,12 +8,14 @@ class QueryRequest(BaseModel):
     query: str = Field(..., description="查询内容")
     session_id: Optional[str] = Field(None, description="会话ID，不传则自动生成")
     is_stream: bool = Field(False, description="是否流式返回")
+    enable_agent: Optional[bool] = Field(None, description="是否启用 Agent 模式，优先级高于环境变量")
 
 
 class QueryResponse(BaseModel):
     message: str = Field(..., description="响应消息")
     session_id: str = Field(..., description="会话ID")
     answer: str = Field("", description="生成的答案")
+    agent_steps: Optional[List[dict]] = Field(None, description="Agent 推理步骤，仅 Agent 模式下有值")
 
 
 class StreamSubmitResponse(BaseModel):

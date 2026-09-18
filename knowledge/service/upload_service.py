@@ -7,8 +7,10 @@ import time
 import uuid
 from datetime import datetime
 from fastapi import UploadFile
+from pypdf import PdfReader
+from pypdf.errors import PyPdfError
 from knowledge.core.paths import get_local_base_dir
-from knowledge.processor.import_processor.exceptions import FileProcessingError
+from knowledge.processor.import_processor.exceptions import FileProcessingError, FileValidationError
 from knowledge.utils.client.storage_clients import StorageClients
 from knowledge.processor.import_processor.main_graph import get_import_graph
 from knowledge.utils.task_util import update_task_status, add_running_task, add_done_task, add_node_duration, \
@@ -102,11 +104,12 @@ class UpLoadService:
         处理文件上传
 
         1. 校验文件后缀（仅 .pdf）
-        2. 将上传的文件存储到本地临时目录(主要为了做中转)，同时计算MD5
-        3. 校验文件大小（≥ 1KB）
-        4. 根据【文件MD5 + 文件名】查重，重复则拦截
-        5. 将上传的文件存储到远程minio(主要持久化)
-        6. 将file_dir / import_file_path / task_id / md5 返回
+        2. 校验文件大小（0字节拦截）
+        3. 将上传的文件存储到本地临时目录(主要为了做中转)，同时计算MD5
+        4. PDF 完整性校验（损坏/加密拦截）
+        5. 根据文件MD5查重，重复则拦截
+        6. 将上传的文件存储到远程minio(主要持久化)
+        7. 将file_dir / import_file_path / task_id / md5 返回
         Args:
             file:
 
@@ -117,8 +120,26 @@ class UpLoadService:
         # ── 前置校验1：文件后缀 ──
         filename = file.filename or ""
         if not filename.lower().endswith('.pdf'):
-            logger.warning(f"[upload] 后缀拦截: {filename}")
-            raise FileProcessingError(message=f"只允许上传PDF文件，当前文件后缀不支持: {filename}")
+            logger.warning(
+                f"[upload] 后缀拦截 | 文件名='{filename}' | "
+                f"原因: 仅支持 .pdf 格式 | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            raise FileValidationError(
+                message=f"只允许上传 PDF 文件，当前文件格式不支持 (文件名: {filename})"
+            )
+
+        # ── 前置校验2：空文件（0 字节）──
+        content = file.file.read()
+        if not content:
+            logger.warning(
+                f"[upload] 空文件拦截 | 文件名='{filename}' | "
+                f"原因: 文件内容为空（0 字节） | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            raise FileValidationError(
+                message=f"文件内容为空（0 字节），请确认文件有效后重新上传 (文件名: {filename})"
+            )
+        file_size = len(content)
+        file.file.seek(0)  # 重置指针，后续 save_upload_file_to_local 仍可正常读取
 
         # 1. 生成任务id
         task_id = str(uuid.uuid4().hex[:8])
@@ -134,20 +155,18 @@ class UpLoadService:
         # 4. 保存文件到临时目录（同时计算MD5）
         import_file_path, md5_hash = self.save_upload_file_to_local(file, file_dir)
 
-        # ── 前置校验2：文件大小（≥ 1KB）──
-        file_size = os.path.getsize(import_file_path)
-        if file_size < 1024:
-            shutil.rmtree(file_dir, ignore_errors=True)
-            logger.warning(f"[upload] 大小拦截: {filename}, size={file_size}B")
-            raise FileProcessingError(message=f"文件小于1KB，拒绝上传 (当前: {file_size}B)")
+        # ── 前置校验3：PDF 完整性（损坏 / 加密）──
+        self._validate_pdf_integrity(import_file_path, filename)
 
-        # 5. 查重：根据【文件MD5 + 文件名】查询 MongoDB
-        filename = os.path.basename(import_file_path)
-        duplicate = mongo_import_util.find_duplicate_by_md5(filename, md5_hash)
+        # 5. 查重：根据文件MD5查询 MongoDB
+        duplicate = mongo_import_util.find_duplicate_by_md5(md5_hash)
         if duplicate:
             shutil.rmtree(file_dir, ignore_errors=True)
-            logger.warning(f"[upload] 重复文件拦截: {filename}, MD5={md5_hash}, 已存在_id={duplicate.get('_id')}")
-            raise FileProcessingError(message=f"该文件已经上传过，禁止重复入库")
+            logger.warning(
+                f"[upload] 重复文件拦截 | 文件名='{filename}' | MD5={md5_hash} | "
+                f"已存在_id={duplicate.get('_id')} | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            raise FileProcessingError(message=f"该文档已上传至知识库，请勿重复上传")
 
         # 6. 保存文件到minio中
         minio_object_path = self.save_upload_file_to_minio(import_file_path, file.filename)
@@ -157,6 +176,56 @@ class UpLoadService:
 
         # 7. 返回图谱的信息
         return task_id, import_file_path, file_dir, minio_object_path, md5_hash
+
+    @staticmethod
+    def _validate_pdf_integrity(file_path: str, filename: str):
+        """校验 PDF 文件完整性：检测损坏或加密的 PDF
+
+        Args:
+            file_path: 本地 PDF 文件路径
+            filename: 原始文件名（用于日志）
+
+        Raises:
+            FileValidationError: PDF 损坏或加密时抛出
+        """
+        try:
+            reader = PdfReader(file_path)
+            if reader.is_encrypted:
+                logger.warning(
+                    f"[upload] 加密PDF拦截 | 文件名='{filename}' | "
+                    f"原因: PDF 已加密，无法解析 | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                raise FileValidationError(
+                    message=f"PDF 文件已加密，无法解析内容，请上传未加密的 PDF 文件 (文件名: {filename})"
+                )
+            page_count = len(reader.pages)
+            if page_count == 0:
+                logger.warning(
+                    f"[upload] 空白PDF拦截 | 文件名='{filename}' | "
+                    f"原因: PDF 无页面内容 | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                raise FileValidationError(
+                    message=f"PDF 文件无页面内容，请确认文件有效后重新上传 (文件名: {filename})"
+                )
+            logger.info(f"[upload] PDF 完整性校验通过: {filename}, 页数={page_count}")
+        except FileValidationError:
+            raise
+        except PyPdfError as e:
+            logger.warning(
+                f"[upload] 损坏PDF拦截 | 文件名='{filename}' | "
+                f"原因: PDF 解析失败 | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            raise FileValidationError(
+                message=f"PDF 文件已损坏，无法正常打开，请重新生成 PDF 后上传 (文件名: {filename})"
+            ) from e
+        except Exception as e:
+            logger.warning(
+                f"[upload] PDF校验异常 | 文件名='{filename}' | "
+                f"原因: {e} | 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+            raise FileValidationError(
+                message=f"PDF 文件无法正常读取，请确认文件有效性 (文件名: {filename})"
+            ) from e
 
     def save_upload_file_to_local(self, file: UploadFile, file_dir: str):
         """

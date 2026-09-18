@@ -12,6 +12,7 @@ class SSEEvent:
     PROGRESS = "progress"  # 任务节点进度
     DELTA = "delta"  # LLM 流式输出增量
     FINAL = "final"  # 最终完整答案
+    AGENT_STEP = "agent_step"  # Agent 推理步骤
 
 
 # 全局 SSE 任务队列存储

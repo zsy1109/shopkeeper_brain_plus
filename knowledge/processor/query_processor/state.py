@@ -28,6 +28,8 @@ class QueryGraphState(TypedDict):
     rewritten_query: str  #重写答案
     history: list   # 历史对话
     is_stream: bool # 是否流式输出
+    enable_agent: bool # 是否启用 Agent 模式
+    agent_steps: list # Agent 推理步骤
 
 
 # ==================== 默认状态 ====================
@@ -48,6 +50,8 @@ DEFAULT_STATE: QueryGraphState = {
     "rewritten_query": "",          # 重写查询
     "history": [],                  # 历史对话
     "is_stream": False,             # 是否流式输出 (默认设为 False)
+    "enable_agent": None,           # 是否启用 Agent 模式 (None=未指定，由环境变量决定)
+    "agent_steps": [],              # Agent 推理步骤列表
 }
 
 def create_default_state(**overrides) -> QueryGraphState:

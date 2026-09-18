@@ -61,6 +61,11 @@ class FileProcessingError(ImportProcessError):
     pass
 
 
+class FileValidationError(FileProcessingError):
+    """文件校验错误：后缀不符、空文件、损坏/加密 PDF"""
+    pass
+
+
 class PdfConversionError(FileProcessingError):
     """PDF 转换错误：MinerU 转换失败"""
     pass

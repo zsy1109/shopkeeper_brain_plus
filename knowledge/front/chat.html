@@ -271,6 +271,54 @@
     .progress li:has(✅)::before{background:var(--success);box-shadow:0 0 6px rgba(16,185,129,0.5)}
     .progress li:has(⏳)::before{background:var(--brand);animation:pulse-dot 1.2s infinite}
 
+    details.agent-reason{
+      margin-top:10px;
+      border:1px solid rgba(244,114,182,0.25);
+      border-radius:var(--radius-md);
+      padding:10px 12px;
+      background:rgba(15,23,42,0.5);
+      max-width:100%;
+    }
+    details.agent-reason summary{
+      cursor:pointer;user-select:none;color:#e2e8f0;font-size:12px;font-weight:500;
+      display:flex;align-items:center;gap:8px;outline:none;
+    }
+    details.agent-reason > .turn{
+      margin:12px 0 0 0;padding:10px 12px;
+      border-radius:var(--radius-sm);
+      background:rgba(15,23,42,0.5);
+      border:1px solid var(--border);
+    }
+    details.agent-reason .turn-header{
+      font-size:12px;font-weight:600;color:var(--brand-3);
+      margin-bottom:6px;display:flex;align-items:center;gap:6px;
+    }
+    details.agent-reason .turn-thought{
+      font-size:11px;color:var(--muted);line-height:1.5;
+      padding:6px 8px;border-radius:6px;
+      background:rgba(56,189,248,0.06);
+      border-left:2px solid rgba(56,189,248,0.4);
+      margin-bottom:8px;
+      max-height:120px;overflow-y:auto;
+    }
+    details.agent-reason .turn-action{
+      font-size:11px;margin:4px 0 0 8px;
+      padding:6px 8px;border-radius:6px;
+      background:rgba(16,185,129,0.06);
+      border-left:2px solid rgba(16,185,129,0.4);
+    }
+    details.agent-reason .action-tool{
+      font-weight:500;color:var(--success);
+    }
+    details.agent-reason .action-args{
+      color:var(--dim);margin-left:4px;word-break:break-all;
+    }
+    details.agent-reason .action-obs{
+      color:var(--muted);margin-top:4px;line-height:1.4;
+      max-height:80px;overflow-y:auto;
+      font-size:10px;
+    }
+
     .answer-images{margin-top:12px;display:flex;flex-direction:column;gap:10px}
     .answer-images img{
       display:block;max-width:min(100%, 600px);max-height:600px;width:auto;height:auto;
@@ -433,6 +481,11 @@
     </div>
 
     <div class="composer">
+      <div class="agent-control" style="display:flex;align-items:center;padding:0 0 8px 0;">
+        <label id="agentLabel" title="启用后将使用 ReAct Agent 进行多轮工具调用（知识库检索+联网搜索+实时价格+商品对比），控制台将输出完整推理日志" style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;color:var(--muted);padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:rgba(15,23,42,0.4);transition:all 0.2s;">
+          <input type="checkbox" id="agentToggle" style="accent-color:#f472b6;"> 开启AI Agent智能体模式(ReAct多轮工具调用)
+        </label>
+      </div>
       <div class="input-row">
         <textarea id="input" placeholder="输入你的问题…（Enter 发送，Shift+Enter 换行）"></textarea>
         <button class="send" id="send" title="发送 (Enter)">
@@ -735,7 +788,63 @@
       }
     }
 
-    function finalizeBotAnswer(botMsgEl, answer, error, imageUrls){
+    function renderAgentSteps(botMsgEl, steps){
+      const bubble = botMsgEl.querySelector('.bubble');
+      let panel = bubble.querySelector('details.agent-reason');
+
+      const safeSteps = Array.isArray(steps) ? steps : [];
+      if(safeSteps.length === 0) return;
+
+      if(!panel){
+        panel = document.createElement('details');
+        panel.className = 'agent-reason';
+        panel.innerHTML = '<summary>🔍 Agent推理链路（ReAct）</summary>';
+        const firstEl = bubble.querySelector('.answer, details.progress');
+        if(firstEl){
+          bubble.insertBefore(panel, firstEl);
+        }else{
+          bubble.appendChild(panel);
+        }
+      }
+
+      const existing = panel.querySelectorAll('.turn');
+      const startFrom = existing.length;
+
+      for(let i = startFrom; i < safeSteps.length; i++){
+        const step = safeSteps[i];
+        if(!step) continue;
+        const turnEl = document.createElement('div');
+        turnEl.className = 'turn';
+
+        const headerHtml = `<div class="turn-header">🔄 第${step.turn || '?'}轮推理</div>`;
+
+        let thoughtHtml = '';
+        if(step.thought){
+          const t = escapeHtml(String(step.thought).slice(0, 300));
+          thoughtHtml = `<div class="turn-thought">💭 <b>Thought:</b> ${t}</div>`;
+        }
+
+        let actionsHtml = '';
+        const actions = Array.isArray(step.actions) ? step.actions : [];
+        for(const a of actions){
+          if(!a) continue;
+          const toolName = escapeHtml(String(a.tool || 'unknown'));
+          const args = a.args ? escapeHtml(String(a.args).slice(0, 150)) : '';
+          const obs = a.observation ? escapeHtml(String(a.observation).slice(0, 300)) : '';
+          actionsHtml +=
+            `<div class="turn-action">` +
+            `🔧 <span class="action-tool">${toolName}</span>` +
+            (args ? `<span class="action-args">(${args})</span>` : '') +
+            (obs ? `<div class="action-obs">📋 <b>Observation:</b> ${obs}</div>` : '') +
+            `</div>`;
+        }
+
+        turnEl.innerHTML = headerHtml + thoughtHtml + actionsHtml;
+        panel.appendChild(turnEl);
+      }
+    }
+
+    function finalizeBotAnswer(botMsgEl, answer, error, imageUrls, agentSteps){
       const bubble = botMsgEl.querySelector('.bubble');
       const progress = botMsgEl.querySelector('details.progress');
       const err = (error || '').trim();
@@ -766,6 +875,10 @@
       bubble.appendChild(answerEl);
       renderAnswerWithImages(answerEl, answer || '', imageUrls || []);
       if(progressEl) bubble.appendChild(progressEl);
+
+      if(agentSteps && agentSteps.length > 0 && agentToggle.checked){
+        renderAgentSteps(botMsgEl, agentSteps);
+      }
     }
 
     async function loadHistory(){
@@ -790,13 +903,15 @@
 
     async function submitQuery(text){
       const isStream = streamToggle.checked;
+      const enableAgent = agentToggle.checked;
       const res = await fetch(`${API_BASE}/query`, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({
           query: text,
           session_id: sessionId,
-          is_stream: isStream
+          is_stream: isStream,
+          enable_agent: enableAgent
         })
       });
       if(!res.ok){
@@ -845,7 +960,8 @@
 
         if (!isStream) {
           renderProgress(botMsgEl, data.done_list || [], [], 'completed');
-          finalizeBotAnswer(botMsgEl, data.answer, data.error, data.image_urls || []);
+          const agentSteps = Array.isArray(data.agent_steps) ? data.agent_steps : [];
+          finalizeBotAnswer(botMsgEl, data.answer, data.error, data.image_urls || [], agentSteps);
           sendBtn.disabled = false;
           return;
         }
@@ -862,6 +978,7 @@
 
         const es = new EventSource(`${API_BASE}/stream/${task_id}`);
         let rawAnswerText = '';
+        let agentStepsStream = [];
 
         es.addEventListener('progress', (e) => {
           try{
@@ -871,6 +988,18 @@
               const typing = botMsgEl.querySelector('.typing');
               if(typing) typing.remove();
               sendBtn.disabled = false;
+            }
+          }catch(_){}
+        });
+
+        es.addEventListener('agent_step', (e) => {
+          try{
+            const d = JSON.parse(e.data || '{}');
+            if(d && d.step){
+              agentStepsStream.push(d.step);
+              if(agentToggle.checked){
+                renderAgentSteps(botMsgEl, agentStepsStream);
+              }
             }
           }catch(_){}
         });

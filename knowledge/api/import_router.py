@@ -19,7 +19,7 @@ from knowledge.utils import mongo_import_util
 from knowledge.utils import milvus_util
 from knowledge.utils.client.storage_clients import StorageClients
 from knowledge.service import delete_service
-from knowledge.processor.import_processor.exceptions import FileProcessingError
+from knowledge.processor.import_processor.exceptions import FileProcessingError, FileValidationError
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -87,6 +87,8 @@ def register_router(app: FastAPI):
         # 1. 将上传的文件写入到本地临时目录以及远程MinIO（含MD5计算和查重）
         try:
             task_id, import_file_path, file_dir, minio_object_path, md5_hash = upload_service.process_upload_file(file)
+        except FileValidationError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except FileProcessingError as e:
             raise HTTPException(status_code=409, detail=str(e))
 

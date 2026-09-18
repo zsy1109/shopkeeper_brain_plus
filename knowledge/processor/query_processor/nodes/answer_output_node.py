@@ -210,13 +210,22 @@ class AnswerOutPutNode(BaseNode):
                 set_task_result(task_id=task_id, key="answer", value=state['answer'])
             return
 
-        use_agent = getattr(self.config, "enable_agent_mode", False)
+        use_agent = self._resolve_agent_mode(state)
         if use_agent:
-            logger.info("Agent 模式已启用，使用 ReAct Agent 生成答案")
+            logger.info("===== Agent 模式已启用，使用 ReAct Agent 生成答案 =====")
             self._generate_answer_with_agent(task_id, state)
         else:
             logger.info("使用普通 LLM 单次调用生成答案")
             self._generate_answer_llm(prompt, task_id, state)
+
+    def _resolve_agent_mode(self, state: QueryGraphState) -> bool:
+        request_agent = state.get("enable_agent")
+        if request_agent is not None:
+            logger.info(f"单次请求指定 enable_agent={request_agent}，优先使用请求参数")
+            return request_agent
+        env_agent = getattr(self.config, "enable_agent_mode", False)
+        logger.info(f"未指定请求级 enable_agent，使用环境变量 ENABLE_AGENT_MODE={env_agent}")
+        return env_agent
 
     def _generate_answer_llm(self, prompt: str, task_id: str, state: QueryGraphState):
         try:
@@ -278,7 +287,12 @@ class AnswerOutPutNode(BaseNode):
             accumulated = ""
             try:
                 for delta in agent.stream(
-                    user_query=user_query, item_names=item_names_str
+                    user_query=user_query, item_names=item_names_str,
+                    on_step=lambda step: push_sse_event(
+                        task_id=task_id,
+                        event=SSEEvent.AGENT_STEP,
+                        data={"step": step},
+                    )
                 ):
                     if delta:
                         push_sse_event(
@@ -291,6 +305,7 @@ class AnswerOutPutNode(BaseNode):
                 logger.error(f"Agent 流式生成失败: {e}")
 
             state["answer"] = accumulated or "Agent 暂无法回答"
+            state["agent_steps"] = agent.get_steps()
         else:
             try:
                 state["answer"] = agent.invoke(
@@ -300,7 +315,10 @@ class AnswerOutPutNode(BaseNode):
                 logger.error(f"Agent 生成失败: {e}")
                 state["answer"] = "Agent 暂无法回答"
 
+            state["agent_steps"] = agent.get_steps()
             set_task_result(task_id=task_id, key="answer", value=state["answer"])
+            import json as _json
+            set_task_result(task_id=task_id, key="agent_steps", value=_json.dumps(state["agent_steps"], ensure_ascii=False))
 
     def _invoke_llm(self, prompt: str, llm_client: ChatOpenAI) -> str:
         """

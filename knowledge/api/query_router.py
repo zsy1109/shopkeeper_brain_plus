@@ -1,4 +1,5 @@
 import asyncio
+import json as _json
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -14,6 +15,16 @@ from knowledge.schema.query_schema import QueryRequest, StreamSubmitResponse, Qu
 from knowledge.core.deps import get_query_service
 from knowledge.service.query_service import QueryService
 from knowledge.utils.sse_util import create_sse_queue, sse_generator
+from knowledge.utils.task_util import get_task_result as _get_task_result
+
+
+def _parse_agent_steps(raw: str):
+    if not raw:
+        return None
+    try:
+        return _json.loads(raw)
+    except Exception:
+        return None
 
 
 class UTF8JSONResponse(JSONResponse):
@@ -96,7 +107,8 @@ def register_router(app: FastAPI):
                                       session_id=session_id,
                                       task_id=task_id,
                                       query=request.query,
-                                      is_stream=request.is_stream)
+                                      is_stream=request.is_stream,
+                                      enable_agent=request.enable_agent)
             return StreamSubmitResponse(message="查询请求已经提交", session_id=session_id, task_id=task_id)
 
         # 3.2 非流式调用(直接用当前线程运行查询流程 不启动一个新线程执行--->合理?。不合理：不是只有流式慢 非流式也慢 )
@@ -104,11 +116,13 @@ def register_router(app: FastAPI):
 
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, service.run_query_graph, session_id, task_id, request.query,
-                                       request.is_stream)
+                                       request.is_stream, request.enable_agent)
             # b. 从任务结果队列中获取答案
             answer = service.get_task_result(task_id)
+            agent_steps_raw = _get_task_result(task_id, "agent_steps", "")
+            agent_steps = _parse_agent_steps(agent_steps_raw)
             # c. 返回查询响应结果对象
-            return QueryResponse(message="查询请求已经处理完了", session_id=session_id, answer=answer)
+            return QueryResponse(message="查询请求已经处理完了", session_id=session_id, answer=answer, agent_steps=agent_steps)
 
     @app.get("/stream/{task_id}")
     async def stream(task_id: str, request: Request) -> StreamingResponse:
@@ -149,4 +163,6 @@ def register_router(app: FastAPI):
 
 
 if __name__ == '__main__':
+    import logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
     uvicorn.run(create_app(), host="0.0.0.0", port=8001)

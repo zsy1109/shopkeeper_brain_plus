@@ -23,7 +23,7 @@ class QueryService:
     def generate_task_id():
         return str(uuid.uuid4().hex[:12])
 
-    def run_query_graph(self, session_id: str, task_id: str, query: str, is_stream: bool):
+    def run_query_graph(self, session_id: str, task_id: str, query: str, is_stream: bool, enable_agent: bool = None):
         """
         运行查询流程的pineline
         Args:
@@ -31,6 +31,7 @@ class QueryService:
             task_id:     任务id
             query:       查询问题
             is_stream:   是否是流式
+            enable_agent: 是否启用Agent模式，优先级高于环境变量
 
         Returns:
 
@@ -43,7 +44,8 @@ class QueryService:
             "session_id": session_id,
             "task_id": task_id,
             "original_query": query,
-            "is_stream": is_stream
+            "is_stream": is_stream,
+            "enable_agent": enable_agent,
         }
 
         # 3. 执行

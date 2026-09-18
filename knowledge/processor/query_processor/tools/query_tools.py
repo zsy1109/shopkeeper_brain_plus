@@ -5,10 +5,14 @@ from knowledge.processor.query_processor.tools.base import AgentTool, ToolRegist
 
 
 class KnowledgeBaseTool(AgentTool):
-    """从已检索+重排序后的知识库文档中获取内容。"""
+    """从已检索+重排序后的知识库文档中获取内容（首要信息来源，必须优先调用）。"""
 
     name = "search_knowledge_base"
-    description = "从本地知识库中获取产品的技术文档、使用说明、规格参数等内容。知识库是产品PDF手册导入生成的。"
+    description = (
+        "【首要工具，必须优先调用】从本地知识库中获取产品的权威技术文档、使用说明、规格参数等内容。"
+        "知识库由产品PDF手册导入，内容具有最高优先级。"
+        "仅当本工具返回'知识库中暂无相关文档'时，才允许调用 search_web。"
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -50,10 +54,14 @@ class KnowledgeBaseTool(AgentTool):
 
 
 class WebSearchTool(AgentTool):
-    """从互联网搜索实时信息。"""
+    """从互联网搜索实时信息（仅当知识库无相关内容时才允许使用）。"""
 
     name = "search_web"
-    description = "从互联网搜索实时信息，包括产品最新价格、库存状态、用户评价、行业新闻等时效性内容。"
+    description = (
+        "【辅助工具，仅在知识库无结果时使用】从互联网搜索实时信息，包括产品最新价格、库存状态、用户评价、行业新闻等。"
+        "注意：本工具为知识库的补充手段，搜索结果优先级低于知识库内容。"
+        "仅当 search_knowledge_base 返回'知识库中暂无相关文档'时才应调用本工具。"
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -89,10 +97,13 @@ class WebSearchTool(AgentTool):
 
 
 class RealTimePriceTool(AgentTool):
-    """专门获取产品实时价格的工具。"""
+    """联网查询产品价格（仅当知识库无价格信息时才使用）。"""
 
     name = "get_realtime_price"
-    description = "联网查询产品的最新市场价格、批量折扣、库存状态和购买渠道。适用于回答'价格多少'、'有没有降价'、'哪里买'等问题。"
+    description = (
+        "【辅助工具，仅在知识库无价格信息时使用】联网查询产品的最新市场价格、批量折扣、库存状态和购买渠道。"
+        "注意：价格信息以网络搜索结果为准（知识库PDF通常不含实时价格），但产品规格参数必须以知识库为准。"
+    )
     parameters = {
         "type": "object",
         "properties": {
@@ -192,16 +203,36 @@ def build_tools(
     item_names: List[str],
 ) -> List[AgentTool]:
     """根据 state 中的数据构建工具列表。"""
+
+    import os
+    import logging
+    _log = logging.getLogger(__name__)
+
     ToolRegistry.clear()
 
     tools = [
         KnowledgeBaseTool(reranked_docs=reranked_docs, item_names=item_names),
-        WebSearchTool(web_docs=web_docs),
-        RealTimePriceTool(web_docs=web_docs),
-        CompareProductsTool(reranked_docs=reranked_docs, web_docs=web_docs),
     ]
+
+    mcp_web_search_configured = bool(os.getenv("MCP_DASHSCOPE_BASE_URL", "").strip())
+    has_web_docs = bool(web_docs)
+
+    if mcp_web_search_configured:
+        tools.append(WebSearchTool(web_docs=web_docs))
+        tools.append(RealTimePriceTool(web_docs=web_docs))
+        _log.info(
+            f"[Agent Tool] 联网搜索已配置 MCP_DASHSCOPE_BASE_URL，"
+            f"启用 WebSearchTool + RealTimePriceTool (web_docs={len(web_docs)}条)"
+        )
+    else:
+        _log.warning(
+            "[Agent Tool] 未配置 MCP_DASHSCOPE_BASE_URL，自动禁用 WebSearchTool 和 RealTimePriceTool，避免 Agent 报错"
+        )
+
+    tools.append(CompareProductsTool(reranked_docs=reranked_docs, web_docs=web_docs))
 
     for t in tools:
         ToolRegistry.register(t)
 
+    _log.info(f"[Agent Tool] 共启用 {len(tools)} 个工具: {[t.name for t in tools]}")
     return tools
