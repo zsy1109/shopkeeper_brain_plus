@@ -332,6 +332,138 @@ resp = client.chat.completions.create(
   <p class="a" style="padding-left:0">☐ 简历纸质版 2 份 &nbsp; ☐ 手机里 Agent 截图 / 代码 &nbsp; ☐ 提前 15 分钟到 &nbsp; ☐ 着装干净（不用正装，别拖鞋）&nbsp; ☐ 自我介绍能脱口而出 &nbsp; ☐ 准备好 2 个反问</p>
 </div>
 
+<div style="height:30px"></div>
+<div style="background:linear-gradient(135deg,#3a2b6b 0%,#5b3a8f 55%,#7c5ab0 100%);color:#fff;border-radius:16px;padding:26px 28px;margin:40px 0 22px">
+  <div style="font-size:12px;letter-spacing:.16em;opacity:.7">PROJECT-BASED · 真实项目素材</div>
+  <h1 style="margin:6px 0 8px;font-size:24px">把「掌柜智库」变成你最硬的面试证据</h1>
+  <p style="margin:0;opacity:.88;font-size:14px;line-height:1.7">下面所有数字、参数、链路都来自你工作区里的真实代码（<code style="background:rgba(255,255,255,.15);padding:1px 6px;border-radius:4px">/workspace</code>），可核对、可追溯。把这部分讲透，你就从「我学过」变成「我做过」。</p>
+</div>
+
+<div class="verdict">
+  <h2>先给项目一句「电梯陈述」（背下来，面试开场就打）</h2>
+  <ul>
+    <li><b>「我做过一个面向零售/快消行业的企业知识库 RAG 系统——掌柜智库。」</b>它把商品 PDF 手册的<b>智能导入</b>和<b>自然语言问答</b>用 LangGraph 编排成两张工作流图：底层走<b>混合检索 + HyDE + RRF 融合 + BGE 重排 + ReAct Agent 工具调用</b>的全链路，还接了 MCP 做联网补充。</li>
+  </ul>
+</div>
+
+<h2 class="sec"><span class="num">11</span>项目架构 · 两张图讲清楚<span class="tag">面试大概率让你画</span></h2>
+
+<h3>① 导入图（把 PDF 变成可检索的知识）</h3>
+<div class="flow">
+  <span class="node">entry 入口</span><span class="arrow">→</span>
+  <span class="node">pdf→md (MinerU)</span><span class="arrow">→</span>
+  <span class="node">md→图片</span><span class="arrow">→</span>
+  <span class="node">文档切块</span><span class="arrow">→</span>
+  <span class="node">商品名识别</span><span class="arrow">→</span>
+  <span class="node">BGE-M3 向量化</span><span class="arrow">→</span>
+  <span class="node">写入 Milvus</span>
+</div>
+<p class="muted" style="font-size:13px;margin-top:6px">入口用条件边按文件类型路由（PDF / MD），PDF 走 MinerU 解析成 Markdown，表格/图片单独处理后切块、向量化，最后存入向量库。</p>
+
+<h3>② 查询图（用户提问 → 给出答案）</h3>
+<div class="flow" style="margin:14px 0">
+  <span class="node">商品名确认/拦截</span><span class="arrow">→</span>
+  <span class="node">multi_search 并行分发</span>
+</div>
+<div class="flow" style="margin:8px 0 14px 24px">
+  <span class="node" style="background:#eef2fb;color:#3a4a8a;border-color:#c8d3f0">hybrid 混合向量检索</span>
+  <span class="node" style="background:#eef2fb;color:#3a4a8a;border-color:#c8d3f0">HyDE 假设答案检索</span>
+  <span class="node" style="background:#eef2fb;color:#3a4a8a;border-color:#c8d3f0">web MCP 联网</span>
+</div>
+<div class="flow">
+  <span class="node">join 汇合</span><span class="arrow">→</span>
+  <span class="node">RRF 融合去重</span><span class="arrow">→</span>
+  <span class="node">BGE 重排 + 动态截断</span><span class="arrow">→</span>
+  <span class="node">answer_output（普通 / ReAct Agent）</span>
+</div>
+<p class="muted" style="font-size:13px;margin-top:6px">关键路由：商品名确认节点如果已经生成了「反问用户选哪个产品」的答案，就<b>直接短路跳到 answer_output</b>，不浪费检索资源——这就是运营视角的「该省的 token 要省」。</p>
+
+<h2 class="sec"><span class="num">12</span>真实参数表 · 你的杀手锏<span class="tag">说出这些数字＝真做过</span></h2>
+<table>
+  <tr><th style="width:180px">环节</th><th>真实取值（来自代码）</th><th>为什么这么设</th></tr>
+  <tr><td>混合检索</td><td>BGE-M3 dense + sparse，权重 <b>0.5 / 0.5</b>，每路 limit <b>5</b></td><td>稠密管语义、稀疏管关键词，等权起步再调</td></tr>
+  <tr><td>检索融合</td><td>RRF，<b>k = 60</b>，max_results = 10，两路等权</td><td>代码注释原话：RRF 里影响最大的是 k，不是 weight</td></tr>
+  <tr><td>重排截断</td><td>BGE-M3 reranker，sigmoid 归一化；min_top_k <b>3</b>、max_top_k <b>10</b>，断崖阈值 <b>≥0.15</b></td><td>静态 top_k 偏大塞无关内容→幻觉，偏小信息不全→幻觉</td></tr>
+  <tr><td>上下文上限</td><td>max_context_chars = <b>12000</b></td><td>控制给 LLM 的上下文长度，控成本 + 防溢出</td></tr>
+  <tr><td>商品名对齐</td><td>高置信 <b>0.75</b>、中置信 <b>0.45</b>、分差 gap <b>0.08</b>、最多给 <b>3</b> 个选项</td><td>高置信直接答、中置信反问、低置信拒绝</td></tr>
+  <tr><td>ReAct Agent</td><td>max_turns = <b>5</b>，temperature = <b>0.1</b>，流式 SSE 输出</td><td>5 轮防死循环；低温保证客服场景稳定</td></tr>
+  <tr><td>工具</td><td>知识库查询（首要）、联网搜索、实时价格、产品对比</td><td>工具描述里强制「知识库优先，web 仅兜底」</td></tr>
+  <tr><td>存储</td><td>Milvus（向量/商品名集合）+ MongoDB（历史对话，取最近 10 条）</td><td>会话上下文从 Mongo 拉，支持多轮追问</td></tr>
+</table>
+
+<h2 class="sec"><span class="num">13</span>6 个工程亮点 · 每个都是一个故事<span class="tag">问题 → 方案 → 结果</span></h2>
+<div class="card">
+  <p class="q">① 动态 top_k 断崖截断，主动控制幻觉</p>
+  <p class="a"><b>问题：</b>重排后固定取 top-5，有时塞了无关文档，LLM 照着编；有时真正相关的只有 2 条却硬凑 5 条。<b>方案：</b>把 rerank 分数 sigmoid 归一化到 0–1，找相邻分数的最大断崖（≥0.15）作为截断点，再用 min_top_k=3 兜底。<b>一句话价值：</b>「该给几条给几条」，从源头减少喂给模型的噪声。</p>
+</div>
+<div class="card">
+  <p class="q">② 三路检索 + RRF，解决「问的和写的不一样」</p>
+  <p class="a"><b>问题：</b>用户问「怎么测电压」，文档写「直流电压测量步骤」，纯向量检索匹配差。<b>方案：</b>一路 hybrid 语义检索；一路 <b>HyDE</b>——先让 LLM 写一段「假设性答案」，再用答案去检索（措辞更接近文档）；一路 MCP 联网补实时信息。三路结果用 RRF 公式 <code>1/(k+rank)</code> 融合去重。<b>被追问 HyDE 缺点：</b>多一次 LLM 调用、有延迟和成本，且假设答案若偏了会带偏检索，所以用 RRF 和原向量路互相矫正。</p>
+</div>
+<div class="card">
+  <p class="q">③ 商品名歧义拦截，先确认再回答</p>
+  <p class="a"><b>问题：</b>「万用表怎么测电压」没指明型号，直接答会张冠李戴。<b>方案：</b>LLM 提取商品名 → 向量库对齐 → 分数 &gt;0.75 直接确认走检索；0.45–0.75 反问「您是问 A 还是 B？」；&lt;0.45 直接拒绝并请用户给型号。用户回「对的 / 1」还能从历史里自动对应到上一轮选项。</p>
+</div>
+<div class="card">
+  <p class="q">④ 三层兜底，防止「误拦截」把正常问题挡掉</p>
+  <p class="a">LLM 没提取到商品名 → 用 Milvus 子串匹配兜底（连冷门型号都能捞到）；向量对齐失败 → 用 LLM 提取结果兜底。<b>核心思路：</b>宁可放过让下游处理，也不要在入口把用户问题误杀。这是我在代码里加的防御性逻辑。</p>
+</div>
+<div class="card">
+  <p class="q">⑤ LLM 输出格式漂移，用正则剥离代码块围栏</p>
+  <p class="a"><b>坑：</b>换模型或 API 升级后，LLM 偶尔把 JSON 包在 <code>```json … ```</code> 里返回，直接 <code>json.loads</code> 就崩。<b>修：</b>解析前先正则剥掉首尾的 markdown 围栏，再反序列化，并对字段类型做校验。<b>面试价值：</b>说明你知道 LLM 输出不可信，工程上要做防御。</p>
+</div>
+<div class="card">
+  <p class="q">⑥ Agent 稳定性：防死循环 + 工具条件注册</p>
+  <p class="a">max_turns=5 到顶就用最后一条消息兜底，不让 Agent 无限调工具；联网工具只在配了 <code>MCP_DASHSCOPE_BASE_URL</code> 时才注册，没配就不注册——避免 Agent 调用一个根本不存在的工具报错。Prompt 里用「铁律」强制工具顺序：必须先查知识库，知识库没有才准联网，冲突以知识库为准。</p>
+</div>
+
+<h2 class="sec"><span class="num">14</span>面试官高频追问 · 参考答案<span class="tag">这节最值钱，对着练</span></h2>
+
+<div class="card">
+  <p class="q">Q：你们为什么用三路检索，直接向量检索不行吗？</p>
+  <p class="a">直接向量检索只解决了「语义相近」，但有两个盲区：一是用户问法和文档措辞不一致（HyDE 用假设答案搭桥），二是本地知识库没有的实时信息（MCP 联网补）。三路召回后用 RRF 融合，比单路召回率更高，而且各路异构、结果可以互相校验。</p>
+
+  <p class="q">Q：RRF 融合和直接加权打分比，好在哪？k 怎么定的？</p>
+  <p class="a">加权融合要求各路分数同分布、可比较，而向量分、稀疏分、网络分的量纲不一样，硬加权容易被某一路带偏。RRF 只用<b>排名</b>，对量纲不敏感，鲁棒性更好。k 是平滑系数，我们取 60，代码里也留了注释说明 k 比 weight 影响大，后续可以用一批 query 压测调。</p>
+
+  <p class="q">Q：重排后为什么不直接取 top-5，要搞动态截断？</p>
+  <p class="a">因为 top-5 是「拍脑袋」的固定值。真正相关的文档分数会聚成一团，和不相关的之间有个明显断崖。我找这个断崖来切，该 3 条就 3 条、该 8 条就 8 条，再用 min 3 / max 10 兜底。目的是<b>给 LLM 的上下文越干净，幻觉越少</b>。</p>
+
+  <p class="q">Q：你怎么控制幻觉？结合项目具体说。</p>
+  <p class="a">我是五层一起控：① 检索侧动态截断减少噪声；② Prompt 里写「零幻觉铁律」，知识库没有就明说，不许用训练数据补；③ 工具调用顺序强制知识库优先；④ 答案每条事实都标【知识库原文】或【网络补充】来源；⑤ 知识和网络冲突时强制以知识库 PDF 为准。</p>
+
+  <p class="q">Q：你这个 Agent 和普通 RAG 问答有什么区别？</p>
+  <p class="a">普通 RAG 是「检索一次 → 生成一次」的直线流程；Agent 是<b>多轮循环</b>：模型先思考要不要调用工具、调哪个，执行完把结果塞回上下文再思考，直到能回答或达到 5 轮上限。我们的 Agent 有知识库、联网、查价、对比 4 个工具，能处理「先查规格再查价格再做对比」这类需要多步的问题。</p>
+
+  <p class="q">Q：为什么用 LangGraph 编排，自己写 if/else 不行吗？</p>
+  <p class="a">可以写，但 LangGraph 让每个节点解耦、状态统一存在一个 TypedDict 里，加节点或改路由不用动别的地方；它天然支持<b>条件边</b>（商品名确认后短路）和<b>并行 fan-out / fan-in</b>（三路检索同时跑再汇合），还能用 stream 逐节点观测执行过程，调试和复盘方便很多。</p>
+
+  <p class="q">Q：商品名为什么要向量对齐，LLM 直接提取不够吗？</p>
+  <p class="a">LLM 提取的是用户口里的说法（比如「那个万用表」），但知识库里存的是标准型号（「RS-12 数字万用表」）。不对齐的话，下游检索用错名字就查不到。向量对齐就是把用户说法映射到库内标准名，再按置信度决定直接答还是反问确认。</p>
+
+  <p class="q">Q：这个项目你遇到最大的坑是什么，怎么解决的？</p>
+  <p class="a">（挑一个讲，推荐第⑤个格式漂移或第④个误拦截）比如误拦截：早期只靠 LLM 提取商品名，遇到 LLM 不认识的冷门型号，整个查询被挡在入口、用户体验很差。后来加了 Milvus 子串匹配兜底和对齐失败兜底，拦截率明显下降，正常问题不再被误杀。</p>
+
+  <p class="q">Q：你们怎么评估检索/问答效果？怎么调参？</p>
+  <p class="a">评估上：建一批带标准答案的 query 做评测集，看召回率、答案准确率、转人工/无法回答的比例。调参上：像商品名阈值 0.75 / 0.45 这些不是拍脑袋定的，是拿一批真实 query 跑全流程、看哪个阈值下「误拦截最少 + 答错最少」选出来的——这也是代码 TODO 里写明的方法。</p>
+</div>
+
+<h2 class="sec"><span class="num">15</span>怎么把项目写进自我介绍 / 简历<span class="tag">诚实认领，别吹过头</span></h2>
+<div class="card">
+  <p class="muted" style="margin-top:0;font-size:13px">把第 11 节的「电梯陈述」放进自我介绍第一段，然后接一个具体亮点（从第 13 节挑你最熟的一个），按 STAR 讲：</p>
+  <p class="a"><b>情境：</b>用户问法和文档不一致 + 型号多有歧义，直接 RAG 答非所问、还会幻觉。<b>任务：</b>提升问答准确率、降低幻觉。<b>行动：</b>我负责/参与了 XX（如检索链路的 HyDE 路、动态 top_k 截断、商品名兜底逻辑）。<b>结果：</b>用评测集对比，召回/准确率提升，误拦截下降（没有真实数字就说「badcase 明显减少」，别编具体百分比）。</p>
+</div>
+<div class="danger">
+  <p style="margin:0 0 8px"><b>诚实边界（非常重要）：</b></p>
+  <p style="margin:0 0 6px">• 你<b>亲自写过/改过</b>的模块，说「我做了」。只是看过、跑过的，说「我参与了 / 我负责其中 XX 部分」。</p>
+  <p style="margin:0 0 6px">• 被深问到你没碰过的模块（比如 MinerU 子进程隔离、模型下载），直接说：<b>「这块是团队另一部分负责的，我主要做查询链路，不过我了解它的作用是 XX。」</b>——诚实比硬答更加分。</p>
+  <p style="margin:0"><b>万能兜底话术：</b>「这个细节我当时没亲自改，但我知道它是为了解决 XX 问题，思路是 XX。」既不撒谎，又展示你懂全局。</p>
+</div>
+
+<div class="warn">
+  <b>今晚针对项目再花 40 分钟：</b>把第 14 节 9 个 Q&A 盖住答案自问自答一遍；挑 1 个亮点能脱稿讲 90 秒；确认哪些模块是你自己写的，在简历上如实标注。明天带一台能打开项目结构的设备，被问到时翻代码证明。
+</div>
+
 <footer>祝面试顺利 · 记住：<b>他们要的不是最懂 AI 的人，是最能把 AI 用出结果的人。</b></footer>
 </div>
 </body>
