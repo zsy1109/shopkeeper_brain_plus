@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python 面试急救包 · FDE 岗</title>
+<style>
+  :root{
+    --ink:#1b2430; --ink-2:#485462; --ink-3:#8a95a3; --line:#e4e9ef;
+    --teal:#0f8b7e; --teal-soft:#e8f6f3; --red:#c0392b; --red-soft:#fdf0ee;
+    --amber:#b8791a; --amber-soft:#fdf6e9; --blue:#2b6cb0; --blue-soft:#eef4fb;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:18px 14px 60px;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--ink);background:#f6f8fa;line-height:1.75;font-size:15px;
+    max-width:860px;margin:0 auto;-webkit-text-size-adjust:100%;
+  }
+  header{
+    background:linear-gradient(135deg,#123f3a 0%,#0f8b7e 65%,#2fb3a3 100%);
+    color:#fff;border-radius:16px;padding:24px 20px;margin-bottom:18px;
+  }
+  header .kicker{font-size:11px;letter-spacing:.18em;opacity:.75;margin-bottom:6px}
+  header h1{margin:0 0 8px;font-size:23px;line-height:1.35}
+  header p{margin:0;font-size:13.5px;opacity:.9;line-height:1.7}
+  h2{
+    font-size:18px;margin:30px 0 12px;padding-left:11px;
+    border-left:4px solid var(--teal);line-height:1.4;
+  }
+  h2 small{display:block;font-size:12px;font-weight:400;color:var(--ink-3);margin-top:3px;padding-left:1px}
+  h3{font-size:15px;margin:22px 0 8px;color:var(--teal)}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 16px;margin:10px 0}
+  .q{font-weight:700;font-size:14.5px;margin:0 0 8px;color:var(--ink)}
+  .q .no{
+    display:inline-block;background:var(--teal);color:#fff;font-size:11px;
+    border-radius:5px;padding:1px 7px;margin-right:7px;vertical-align:2px;font-weight:600;
+  }
+  .say{
+    display:block;background:var(--teal-soft);border-left:3px solid var(--teal);
+    padding:9px 12px;border-radius:0 7px 7px 0;margin:8px 0;font-size:14px;color:#0b4f46;
+  }
+  .why{font-size:13.5px;color:var(--ink-2);margin:6px 0}
+  .alert{background:var(--red-soft);border:1px solid #f2cfc9;border-left:4px solid var(--red);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:14px;color:#7c2d25}
+  .note{background:var(--amber-soft);border:1px solid #f0dfb8;border-left:4px solid var(--amber);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:14px;color:#6d4c12}
+  .good{background:var(--teal-soft);border:1px solid #bfe6df;border-left:4px solid var(--teal);border-radius:10px;padding:14px 16px;margin:12px 0;font-size:14px;color:#0b5b52}
+  pre{
+    background:#1e2733;color:#e6edf3;border-radius:9px;padding:13px 14px;
+    overflow-x:auto;font-family:var(--mono);font-size:12.6px;line-height:1.65;margin:10px 0;
+  }
+  pre .c{color:#7d8b99}
+  pre .s{color:#a5d6a7}
+  pre .k{color:#82b1ff}
+  code.inl{background:#eef2f6;color:#b5326b;padding:1px 5px;border-radius:4px;font-family:var(--mono);font-size:12.8px}
+  table{width:100%;border-collapse:collapse;font-size:13.6px;margin:10px 0;background:#fff}
+  th,td{border:1px solid var(--line);padding:9px 10px;text-align:left;vertical-align:top}
+  th{background:#f1f5f8;font-size:13px;color:var(--ink-2)}
+  ul,ol{padding-left:20px;margin:8px 0}
+  li{margin:5px 0;font-size:14px;color:var(--ink-2)}
+  li b{color:var(--ink)}
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;background:var(--teal);color:#fff;margin-left:6px;vertical-align:2px}
+  .pill.low{background:#94a3b8}
+  .pill.mid{background:var(--blue)}
+  footer{text-align:center;font-size:12.5px;color:var(--ink-3);margin-top:40px;padding-top:18px;border-top:1px solid var(--line)}
+  .toc{columns:2;column-gap:16px;font-size:13.5px}
+  .toc a{color:var(--teal);text-decoration:none;display:block;padding:2px 0}
+  @media(max-width:520px){.toc{columns:1}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">PYTHON · 3 小时急救</div>
+  <h1>Python 面试急救包<br>从「不会」到「能答」</h1>
+  <p>针对 AI Agent 运营 / FDE 岗。只学这个岗位真正会用到的，不碰算法题。</p>
+</header>
+
+<div class="good">
+  <b>先定心，三句话：</b><br>
+  ① 4–6K 的岗，<b>不会让你白板写算法</b>，最多给段代码让你看输出、找 bug。<br>
+  ② 面试官问 Python，真正想确认的是：<b>能不能看懂代码、能不能改脚本、遇到不会的会不会查</b>。<br>
+  ③ 你不需要「会」，你需要「<b>说得清 + 不心虚 + 承认边界</b>」。诚实分级比硬吹加分得多。
+</div>
+
+<div class="card">
+  <div class="q">这份怎么用（3 小时版）</div>
+  <div class="toc">
+    <a href="#s1">1. 开场怎么说你的水平</a>
+    <a href="#s2">2. 12 个必会基础</a>
+    <a href="#s3">3. 6 段必背代码</a>
+    <a href="#s4">4. 3 道读代码题</a>
+    <a href="#s5">5. 5 个八股（眼熟）</a>
+    <a href="#s6">6. 被问住怎么救场</a>
+    <a href="#s7">7. 3 小时计划</a>
+    <a href="#s8">8. 面试官真正想听什么</a>
+  </div>
+</div>
+
+<h2 id="s1">1. 开场怎么描述你的 Python 水平<small>这段话先背下来，能救你一半的场</small></h2>
+<div class="card">
+  <div class="q">如果他说「你 Python 什么水平？」</div>
+  <span class="say">「我属于实用型：能读写脚本、能调大模型 API、能用 pandas 处理表格数据、能看懂并修改现成代码；算法和复杂后端架构不是我的强项。这个岗位如果需要写脚本、对接接口、处理客户数据，我是能干活的；遇到没见过的库，给我文档我能上手。」</span>
+  <div class="why"><b>为什么这样说：</b>既给出能力范围，又给了「不会但能学」的预期。面试官最怕的是吹「精通」然后一问就露馅。</div>
+  <div class="alert"><b>禁忌回答：</b>「精通 Python」/「什么都能写」/「我零基础但学得快」。前两个会被当场验证，最后一个等于自曝没有交付能力。</div>
+</div>
+
+<h2 id="s2">2. 12 个必会基础<small>按被问概率排序，每题都有「30 秒答案」</small></h2>
+
+<div class="card">
+  <div class="q"><span class="no">01</span>list、tuple、dict 有什么区别？<span class="pill">高频</span></div>
+  <span class="say">「list 是列表，有序、可以改；tuple 是元组，有序但不能改；dict 是键值对，用 key 取值，查找快。实际干活最常用 dict 存结构化数据，比如接口返回的 JSON。」</span>
+<pre><span class="c"># list</span>
+nums = [3, 1, 2]
+nums.append(4)          <span class="c"># [3,1,2,4]</span>
+nums[0]                 <span class="c"># 3</span>
+
+<span class="c"># dict</span>
+user = {"name": "张三", "age": 20}
+user["age"] = 21
+user.get("phone", "无")  <span class="c"># 不存在的 key 不报错</span>
+<span class="k">for</span> k, v <span class="k">in</span> user.items():
+    print(k, v)</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">02</span>列表推导式是什么？<span class="pill">高频</span></div>
+  <span class="say">「就是把一个 for 循环加筛选，写成一行。比如把列表里的正数取出来平方。」</span>
+<pre>nums = [1, -2, 3, -4]
+pos = [x <span class="k">for</span> x <span class="k">in</span> nums <span class="k">if</span> x &gt; 0]      <span class="c"># [1, 3]</span>
+sq  = [x * x <span class="k">for</span> x <span class="k">in</span> nums]          <span class="c"># [1, 4, 9, 16]</span>
+names = [u["name"] <span class="k">for</span> u <span class="k">in</span> users <span class="k">if</span> u["active"]]</pre>
+  <div class="why"><b>必须会。</b>这是 Python 最有辨识度的写法，会写这一句，面试官立刻觉得你「真用过」。</div>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">03</span>字符串常用操作有哪些？</div>
+  <span class="say">「用得最多的是切分、拼接、去空格、替换和格式化输出。」</span>
+<pre>s = "  a,b,c  "
+s.strip()                  <span class="c"># 'a,b,c' 去首尾空白</span>
+s.strip().split(",")       <span class="c"># ['a','b','c']</span>
+"-".join(["a", "b"])       <span class="c"># 'a-b'</span>
+s.replace("a", "x")
+<span class="c"># f-string 最常用</span>
+name, score = "张三", 92
+print(f"{name} 考了 {score} 分")</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">04</span>函数默认参数的坑（可变对象）<span class="pill">高频坑</span></div>
+  <span class="say">「默认参数只在函数定义时创建一次，所以如果默认值是 list 或 dict，多次调用会共享同一个对象，越加越多。正确做法是默认写 None，在函数里再判断。」</span>
+<pre><span class="c"># 错误写法</span>
+<span class="k">def</span> add(item, box=[]):
+    box.append(item)
+    <span class="k">return</span> box
+add(1)   <span class="c"># [1]</span>
+add(2)   <span class="c"># [1, 2] ← 坑！共享了</span>
+
+<span class="c"># 正确写法</span>
+<span class="k">def</span> add(item, box=<span class="k">None</span>):
+    <span class="k">if</span> box <span class="k">is</span> <span class="k">None</span>:
+        box = []
+    box.append(item)
+    <span class="k">return</span> box</pre>
+  <div class="why">这题几乎是最经典的 Python 面试题，答案就一句：<b>默认参数在定义时求值，可变对象会被共享。</b></div>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">05</span>赋值、浅拷贝、深拷贝的区别</div>
+  <span class="say">「等号是引用，两个变量指向同一个对象；浅拷贝只复制外层，里面嵌套的还是共享；深拷贝是完全独立的一份。」</span>
+<pre><span class="k">import</span> copy
+a = [[1, 2], [3, 4]]
+b = a                  <span class="c"># 引用</span>
+c = copy.copy(a)       <span class="c"># 浅拷贝：外层独立，内层共享</span>
+d = copy.deepcopy(a)   <span class="c"># 深拷贝：完全独立</span>
+
+b.append([9])          <span class="c"># a 也变</span>
+c[0].append(99)        <span class="c"># a[0] 也变！</span>
+d[0].append(88)        <span class="c"># a 不变</span></pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">06</span>try / except 怎么用？</div>
+  <span class="say">「把可能出错的代码放 try 里，出错就进 except 处理，finally 不管成不成功都会执行，一般用来关资源。调接口、解析数据我都会包一层。」</span>
+<pre><span class="k">try</span>:
+    n = int(input_str)
+<span class="k">except</span> ValueError:
+    print("不是数字")
+<span class="k">except</span> Exception <span class="k">as</span> e:
+    print("其他错误:", e)
+<span class="k">finally</span>:
+    print("无论如何都执行")</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">07</span>怎么读写文件？</div>
+  <span class="say">「用 with open，它会自动关文件。读用 r，写用 w，追加用 a，中文记得加 encoding='utf-8'。」</span>
+<pre><span class="k">with</span> open("a.txt", "r", encoding="utf-8") <span class="k">as</span> f:
+    text = f.read()
+
+<span class="k">with</span> open("b.txt", "w", encoding="utf-8") <span class="k">as</span> f:
+    f.write("hello")</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">08</span>JSON 怎么处理？<span class="pill mid">FDE 必用</span></div>
+  <span class="say">「字符串转字典用 loads，字典转字符串用 dumps；对文件用 load 和 dump。大模型返回的 JSON 我一定要先剥掉 markdown 代码块再解析，还要包 try/except。」</span>
+<pre><span class="k">import</span> json
+
+obj = json.loads(<span class="s">'{"name": "张三"}'</span>)     <span class="c"># 字符串 → dict</span>
+s = json.dumps(obj, ensure_ascii=<span class="k">False</span>)    <span class="c"># dict → 字符串</span>
+
+<span class="k">with</span> open("config.json", encoding="utf-8") <span class="k">as</span> f:
+    cfg = json.load(f)</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">09</span>包和环境怎么管理？</div>
+  <span class="say">「每个项目建一个虚拟环境，依赖写在 requirements.txt 里，换机器 pip install -r 就能还原。这样不会和系统里其他项目打架。」</span>
+<pre>python -m venv .venv
+<span class="c"># Mac/Linux</span>
+source .venv/bin/activate
+<span class="c"># Windows</span>
+.venv\Scripts\activate
+
+pip install requests pandas
+pip freeze &gt; requirements.txt</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">10</span>常见的报错你能看懂吗？</div>
+  <span class="say">「一般看最后一行就知道类型，再看倒数第二行定位是哪一行。」</span>
+  <table>
+    <tr><th>报错</th><th>意思</th><th>怎么修</th></tr>
+    <tr><td><code class="inl">KeyError</code></td><td>字典里没这个 key</td><td>用 <code class="inl">.get(k, 默认值)</code></td></tr>
+    <tr><td><code class="inl">IndexError</code></td><td>列表下标越界</td><td>检查长度 / 边界</td></tr>
+    <tr><td><code class="inl">TypeError</code></td><td>类型不对</td><td>打印 type() 看实际类型</td></tr>
+    <tr><td><code class="inl">AttributeError</code></td><td>对象没这个属性/方法</td><td>常见于 None 调方法</td></tr>
+    <tr><td><code class="inl">ModuleNotFoundError</code></td><td>没装这个库</td><td><code class="inl">pip install 包名</code></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">11</span>*args 和 **kwargs 是什么？</div>
+  <span class="say">「都是让函数接收任意数量的参数。*args 收成元组，**kwargs 收成字典。一般用在写通用函数或包装别人接口的时候。」</span>
+<pre><span class="k">def</span> f(*args, **kwargs):
+    print(args)     <span class="c"># (1, 2)</span>
+    print(kwargs)   <span class="c"># {'a': 3}</span>
+
+f(1, 2, a=3)</pre>
+</div>
+
+<div class="card">
+  <div class="q"><span class="no">12</span>怎么调用一个 HTTP 接口？<span class="pill mid">FDE 必用</span></div>
+  <span class="say">「用 requests，get 或 post，headers 里带鉴权，params 传参数，timeout 一定要设，最后 raise_for_status 检查状态码，再 json() 取数据。」</span>
+<pre><span class="k">import</span> requests
+
+r = requests.get(
+    <span class="s">"https://api.example.com/query"</span>,
+    headers={<span class="s">"Authorization"</span>: <span class="s">"Bearer xxx"</span>},
+    params={<span class="s">"q"</span>: <span class="s">"退货政策"</span>},
+    timeout=10,
+)
+r.raise_for_status()
+data = r.json()
+print(data.get(<span class="s">"answer"</span>))</pre>
+</div>
+
+<h2 id="s3">3. 6 段必背代码<small>能讲出思路就够，不用真背每个字</small></h2>
+
+<h3>① 调用大模型 API（最高频）</h3>
+<pre><span class="k">import</span> os
+<span class="k">from</span> openai <span class="k">import</span> OpenAI
+
+client = OpenAI(
+    api_key=os.getenv(<span class="s">"DASHSCOPE_API_KEY"</span>),
+    base_url=<span class="s">"https://dashscope.aliyuncs.com/compatible-mode/v1"</span>,
+)
+
+resp = client.chat.completions.create(
+    model=<span class="s">"qwen-plus"</span>,
+    messages=[
+        {<span class="s">"role"</span>: <span class="s">"system"</span>, <span class="s">"content"</span>: <span class="s">"你是简洁的客服助手"</span>},
+        {<span class="s">"role"</span>: <span class="s">"user"</span>, <span class="s">"content"</span>: <span class="s">"能退货吗？"</span>},
+    ],
+    temperature=0.3,
+)
+print(resp.choices[0].message.content)</pre>
+<div class="why"><b>讲解要点：</b>key 放环境变量不写死；system 定角色、user 是问题；temperature 调低更稳定；取 choices[0]。</div>
+
+<h3>② pandas 读表格 + 统计（客户数据场景）</h3>
+<pre><span class="k">import</span> pandas <span class="k">as</span> pd
+
+df = pd.read_excel(<span class="s">"客户问题.xlsx"</span>)
+print(df.head())            <span class="c"># 前 5 行</span>
+print(df.shape)             <span class="c"># (行数, 列数)</span>
+
+<span class="c"># 每类问题出现多少次，取前 10</span>
+print(df[<span class="s">"问题类型"</span>].value_counts().head(10))
+
+<span class="c"># 筛选没解决的，导出</span>
+bad = df[df[<span class="s">"是否解决"</span>] == <span class="s">"否"</span>]
+bad.to_excel(<span class="s">"未解决.xlsx"</span>, index=<span class="k">False</span>)</pre>
+
+<h3>③ 对接客户接口 + 异常处理</h3>
+<pre><span class="k">import</span> requests
+
+<span class="k">def</span> ask(question):
+    <span class="k">try</span>:
+        r = requests.post(
+            <span class="s">"https://客户域名/api/chat"</span>,
+            json={<span class="s">"question"</span>: question},
+            headers={<span class="s">"Authorization"</span>: <span class="s">"Bearer xxx"</span>},
+            timeout=15,
+        )
+        r.raise_for_status()
+        <span class="k">return</span> r.json().get(<span class="s">"answer"</span>, <span class="s">"未返回答案"</span>)
+    <span class="k">except</span> requests.exceptions.Timeout:
+        <span class="k">return</span> <span class="s">"接口超时，请稍后再试"</span>
+    <span class="k">except</span> requests.exceptions.RequestException <span class="k">as</span> e:
+        <span class="k">return</span> f<span class="s">"调用失败: {e}"</span></pre>
+
+<h3>④ 批量处理客户资料文件夹</h3>
+<pre><span class="k">from</span> pathlib <span class="k">import</span> Path
+
+folder = Path(<span class="s">"客户资料"</span>)
+<span class="k">for</span> p <span class="k">in</span> folder.rglob(<span class="s">"*.pdf"</span>):
+    print(p.name, p.stat().st_size, <span class="s">"字节"</span>)</pre>
+
+<h3>⑤ 读写 JSON 配置</h3>
+<pre><span class="k">import</span> json
+
+<span class="k">with</span> open(<span class="s">"config.json"</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    cfg = json.load(f)
+
+cfg[<span class="s">"top_k"</span>] = 5
+
+<span class="k">with</span> open(<span class="s">"config.json"</span>, <span class="s">"w"</span>, encoding=<span class="s">"utf-8"</span>) <span class="k">as</span> f:
+    json.dump(cfg, f, ensure_ascii=<span class="k">False</span>, indent=2)</pre>
+
+<h3>⑥ 给客户提供一个最小接口（FastAPI）</h3>
+<pre><span class="k">from</span> fastapi <span class="k">import</span> FastAPI
+
+app = FastAPI()
+
+<span class="s">@app.get</span>(<span class="s">"/health"</span>)
+<span class="k">def</span> health():
+    <span class="k">return</span> {<span class="s">"status"</span>: <span class="s">"ok"</span>}
+
+<span class="c"># 启动：uvicorn main:app --host 0.0.0.0 --port 8000</span></pre>
+<div class="why"><b>用途：</b>如果被问「客户怎么调用你们的能力」，能说出「包一层 HTTP 接口给他」就够。</div>
+
+<h2 id="s4">4. 3 道读代码题<small>比让你写代码的概率高得多</small></h2>
+
+<div class="card">
+  <div class="q">题 1：下面输出什么？</div>
+<pre><span class="k">def</span> f(x, box=[]):
+    box.append(x)
+    <span class="k">return</span> box
+
+print(f(1))   <span class="c"># ?</span>
+print(f(2))   <span class="c"># ?</span></pre>
+  <span class="say">答：[1] 然后 [1, 2]。因为默认参数只在定义时创建一次，两次调用共用同一个 list。</span>
+</div>
+
+<div class="card">
+  <div class="q">题 2：a 最后是什么？</div>
+<pre>a = [1, 2, 3]
+b = a
+b.append(4)
+print(a)   <span class="c"># ?</span></pre>
+  <span class="say">答：[1, 2, 3, 4]。b = a 是引用，两个变量指向同一个列表。</span>
+</div>
+
+<div class="card">
+  <div class="q">题 3：输出什么？</div>
+<pre>print([i * i <span class="k">for</span> i <span class="k">in</span> range(4) <span class="k">if</span> i % 2 == 0])</pre>
+  <span class="say">答：[0, 4]。range(4) 是 0,1,2,3，取偶数 0 和 2，平方得 0 和 4。</span>
+</div>
+
+<h2 id="s5">5. 5 个八股 · 眼熟即可<small>低概率，别花太多时间</small></h2>
+<div class="card">
+  <div class="q">装饰器是什么？<span class="pill low">低概率</span></div>
+  <span class="say">「在不改原函数的情况下，给它加功能，比如打日志、计时。本质是把函数当参数传进去，返回一个新函数。」</span>
+</div>
+<div class="card">
+  <div class="q">生成器 / yield？<span class="pill low">低概率</span></div>
+  <span class="say">「用 yield 一次吐一个值，不一次性把数据全放内存，适合处理大文件或大批量数据。」</span>
+</div>
+<div class="card">
+  <div class="q">类和对象？<span class="pill low">低概率</span></div>
+  <span class="say">「class 定义一类东西，__init__ 是初始化，self 指实例自己。实际写脚本用得不多，看代码能看懂就行。」</span>
+</div>
+<div class="card">
+  <div class="q">GIL 是什么？<span class="pill low">低概率</span></div>
+  <span class="say">「Python 的全局锁，同一时刻只有一个线程在执行 Python 代码。所以 CPU 密集的活要用多进程，IO 密集的（比如调接口）多线程还有用。」</span>
+</div>
+<div class="card">
+  <div class="q">怎么提升 Python 运行速度？<span class="pill low">低概率</span></div>
+  <span class="say">「先找瓶颈（别瞎优化）：用向量化代替循环、批量处理、加缓存、IO 密集用并发。真到极限就换更快的库或语言。」</span>
+</div>
+
+<h2 id="s6">6. 被问住怎么救场<small>这三句比硬答有用</small></h2>
+<div class="card">
+  <span class="say">「这个语法我平时用得少，我说下我的思路——应该是先读数据、再处理、最后输出，具体写法我需要查一下文档。」</span>
+  <span class="say">「这个 API 的具体名字我记不准，但流程是清楚的：拿到 key、拼请求、发出去、解析返回。」</span>
+  <span class="say">「这块我没深入做过，但代码我能看懂。给我半天时间加文档，我能上手改。」</span>
+  <div class="alert"><b>千万别做：</b>沉默硬编、瞎猜 API 名字、把不知道说成知道。面试官一追问就全塌，反而前功尽弃。</div>
+</div>
+
+<h2 id="s7">7. 3 小时急救计划<small>照着做，今晚能睡</small></h2>
+<table>
+  <tr><th style="width:70px">时间</th><th>做什么</th><th>验收标准</th></tr>
+  <tr><td>0–25 分</td><td>装好 Python，手敲「调大模型 API」那段，跑通</td><td>屏幕上能打出模型回答</td></tr>
+  <tr><td>25–55 分</td><td>基础 1–6：list/dict、推导式、字符串、默认参数、拷贝、异常</td><td>能不看答案说出默认参数那个坑</td></tr>
+  <tr><td>55–85 分</td><td>JSON + 文件 + pandas 读表统计</td><td>能说清 loads/dumps 区别</td></tr>
+  <tr><td>85–110 分</td><td>requests 对接接口 + 异常处理</td><td>能讲出 timeout、raise_for_status 为什么加</td></tr>
+  <tr><td>110–140 分</td><td>读代码 3 题 + 八股扫一眼</td><td>3 题都能说出答案和原因</td></tr>
+  <tr><td>140–180 分</td><td>背「水平定位话术」+ 救场三句 + 自己讲一遍</td><td>录音听一遍，不卡壳</td></tr>
+</table>
+<div class="note"><b>如果只有 60 分钟：</b>只做两件事——跑通调 API 那段代码；背熟第 1 节的水平定位话术。这两样能覆盖 80% 的实际场景。</div>
+
+<h2 id="s8">8. 面试官真正想听什么<small>理解这个，比多背 10 道题有用</small></h2>
+<div class="card">
+  <p class="q" style="margin-bottom:10px">他问 Python，其实在确认三件事：</p>
+  <ol>
+    <li><b>你能不能改脚本</b>——客户现场要临时处理个 Excel、对个接口，你能不能搞定。→ 用六段代码证明。</li>
+    <li><b>你懂不懂 AI 应用的工程常识</b>——key 不能写死、要加超时、JSON 会解析失败、上下文有长度限制。→ 讲这些细节比讲语法分高。</li>
+    <li><b>你会不会瞎承诺</b>——FDE 最怕答应客户「这个能做」结果做不出来。→ 诚实分级正好是加分项。</li>
+  </ol>
+</div>
+<div class="good">
+  <b>最后一句话记住：</b>这个岗位要的不是「Python 工程师」，是「<b>能用 Python 把客户的事办成的人</b>」。你只要证明自己看得懂、改得动、不忽悠，就赢了。
+</div>
+
+<footer>配套主手册：AI-Agent运营-面试冲刺大纲.html · 祝面试顺利</footer>
+</body>
+</html>
