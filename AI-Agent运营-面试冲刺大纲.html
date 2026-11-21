@@ -513,6 +513,481 @@ resp = client.chat.completions.create(
   <b>今晚针对项目再花 40 分钟：</b>把第 14 节 9 个 Q&A 盖住答案自问自答一遍；挑 1 个亮点能脱稿讲 90 秒；确认哪些模块是你自己写的，在简历上如实标注。明天带一台能打开项目结构的设备，被问到时翻代码证明。
 </div>
 
+<style>
+  details.qa{background:#fff;border:1px solid var(--line);border-radius:10px;margin:8px 0;overflow:hidden}
+  details.qa summary{
+    cursor:pointer;padding:12px 16px;font-weight:600;font-size:14px;
+    color:var(--ink);list-style:none;display:flex;gap:9px;align-items:flex-start;line-height:1.6;
+  }
+  details.qa summary::-webkit-details-marker{display:none}
+  details.qa summary::before{content:"▸";color:var(--teal);font-size:13px;flex:0 0 auto;margin-top:2px}
+  details.qa[open] summary::before{content:"▾"}
+  details.qa[open] summary{background:#f4faf9}
+  details.qa .ans{padding:2px 18px 16px 38px;font-size:13.8px;color:var(--ink-2);line-height:1.85}
+  details.qa .ans b{color:var(--ink)}
+  details.qa .ans .say{display:block;background:#f6f9fb;border-left:3px solid var(--teal);padding:10px 14px;border-radius:0 6px 6px 0;margin:8px 0;color:var(--ink)}
+  details.qa .ans .trap{display:block;background:var(--red-soft);border-left:3px solid var(--red);padding:9px 13px;border-radius:0 6px 6px 0;margin:8px 0;font-size:13px;color:#7d2b27}
+  details.qa .ans pre{margin:10px 0;font-size:12.2px}
+  .qnum{color:var(--ink-3);font-weight:400;font-size:12.5px;flex:0 0 auto;min-width:22px}
+  .star{color:#d98b00;font-size:12px;margin-left:4px}
+  .cat{
+    font-size:15px;font-weight:700;margin:26px 0 10px;color:var(--ink);
+    padding-left:10px;border-left:4px solid var(--teal);
+  }
+  .cat span{font-weight:400;font-size:12.5px;color:var(--ink-3);margin-left:8px}
+</style>
+
+<h2 class="sec"><span class="num">16</span>全量问答库 · 66 题<span class="tag">按面试官提问顺序排列</span></h2>
+<div class="warn">
+  <b>怎么用：</b>先盖住答案自问自答，说不顺的点开看话术。<b>★ 是今晚必背的 12 题</b>，其余留个印象即可。所有回答都用大白话，术语只在被追问时才用。
+</div>
+<div class="card">
+  <p class="muted" style="margin-top:0;font-size:13px"><b>★ 必背 12 题：</b>1 自我介绍 · 2 为什么做 AI 运营 · 3 了解我们公司吗 · 6 你的优势 · 10 什么是 Agent · 13 什么是 RAG · 14 怎么减少幻觉 · 22 怎么判断 AI 产品好不好 · 24 怎么评估 Agent 效果 · 25 什么是 badcase · 50 设计一个客服 Agent · 57 实习多久</p>
+</div>
+
+<h3 class="cat" style="margin-top:28px">A. 开场与动机<span>1–8</span></h3>
+
+<details class="qa"><summary><span class="qnum">1</span>先做个自我介绍吧<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「面试官好，我是南通理工 XX 专业的 XXX，目前可实习。我关注 AI Agent 这个方向比较久，自己也动手做过一个企业知识库问答的 RAG 项目——把产品手册导进去，用户用自然语言提问就能查到答案，我对从搭起来到调效果这条链路比较熟。我的特点是上手快、不挑活，配 Agent、写 Prompt、整理 badcase 这些事我能马上分担。希望能有机会在贵司把这件事做深。」</span>
+  <b>要点：</b>30 秒讲完，结构是「我是谁 → 我做过什么 → 我能马上干什么」。<b>只讲一个项目</b>，别报菜名。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">2</span>为什么想做 AI Agent 运营？为什么投这个岗？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「两个原因。一是我自己用 AI 工具搭东西的时候发现，模型能力其实差不多，真正决定好不好用的是后面那层——Prompt 怎么调、资料怎么喂、用户反馈怎么变成改进。这正好是运营干的活。二是我喜欢看到结果，运营离用户最近，改一版 Prompt 隔天就能看到数据变化，这种反馈感很吸引我。」</span>
+  <span class="trap">别说「因为 AI 火 / 前景好」——太虚，人人都这么说。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">3</span>你对我们公司了解多少？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我了解到觅听 2018 年在南通成立，原来是做觅智云 WiFi 盒子的，23 年拿了 A 轮融资，现在在往 AI Agent 业务转型，也在招 AI Agent 开发和运营。我比较看好这个方向——公司有硬件和落地场景的基础，现在把 AI 接进来，是在用 AI 给原有业务提效。我自己做过 RAG 项目，希望能参与到这条新业务线里。」</span>
+  <b>加分：</b>如果能说出「在崇川区产业技术研究院」或具体产品名，会显得你认真查过。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">4</span>你既然懂点技术，为什么不做开发，要做运营？</summary>
+<div class="ans">
+  <span class="say">「我确实能写脚本、能看懂代码，但我更擅长也更有兴趣的是『把东西用起来、用出效果』。纯开发是把它做出来，运营是让它真的被用户用起来、并且越用越好。而且我懂点技术，跟开发沟通不会鸡同鸭讲，提需求能提得清楚，这是我做运营的优势。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">5</span>你觉得这个岗位每天在做什么？</summary>
+<div class="ans">
+  <span class="say">「我理解主要是四块：一是配 Agent、写和调 Prompt，让它答得准、答得像；二是维护知识库和话术库，把用户常问的东西准备好；三是看数据、收 badcase，找出哪类问题答得不好并改掉；四是配合业务做产品演示和内容。核心就是不断让『AI 的输出』更贴近『用户想要的』。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">6</span>你最大的优势是什么？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「三点。第一，我真的动手做过——不是只听过概念，RAG 那条链路我能讲清楚每个环节为什么这么设计。第二，我时间充足、学得快，新工具给我一天基本能上手。第三，我不挑活，配 Agent、整理数据、做演示这些基础活我都愿意干，小团队需要这种人。」</span>
+  <b>要点：</b>优势必须配证据，别只说形容词。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">7</span>你最大的缺点是什么？</summary>
+<div class="ans">
+  <span class="say">「工程底子还不够深，复杂的后端架构我搞不定。所以我给自己的定位是——把边界内的脚本、配置、Prompt 做扎实，遇到搞不定的及时问、不硬扛。另外我以前做事容易追求一步到位，现在会先做出一个能用的版本，再迭代。」</span>
+  <span class="trap">别说「我太追求完美 / 我太拼命」这种假缺点，面试官听腻了。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">8</span>你未来 1–3 年有什么规划？</summary>
+<div class="ans">
+  <span class="say">「短期想把 Agent 运营这条链路做透——从搭、到测、到用数据迭代，能独立负责一个场景。中期希望能从一个场景做到一套方法论，比如沉淀出 Prompt 模板库和评测流程，带新人也能用。长期我想成为既懂业务又懂 AI 落地的人，而不是只会调工具。」</span>
+</div>
+</details>
+
+<h3 class="cat">B. AI / 大模型认知<span>9–21</span></h3>
+
+<details class="qa"><summary><span class="qnum">9</span>用大白话讲讲什么是大模型？</summary>
+<div class="ans">
+  <span class="say">「可以理解成一个读过海量文字、特别会『接话』的系统。你给它一段话，它根据学过的规律一个字一个字往下猜，猜出来就是回答。所以它很会表达、很会总结，但它不理解真假——不知道的事也可能编得很像，这就是为什么会幻觉。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">10</span>什么是 AI Agent？和普通 AI 聊天有什么区别？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「普通聊天是『你问一句它答一句』，它只能动嘴。Agent 是『会动手』的助手——它能自己判断要不要查资料、调哪个工具、分几步把事办完。比如用户问『这个型号多少钱、和另一个比哪个好』，它会先去知识库查规格、再查价格、再做对比，最后给结论。一句话：普通 AI 是参谋，Agent 是能跑腿的员工。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">11</span>一个 Agent 通常由哪几部分组成？</summary>
+<div class="ans">
+  <span class="say">「四块：大脑（大模型，负责理解和决策）、工具（查知识库、搜网页、调接口）、记忆（记住上下文和用户信息）、循环（想—做—看结果—再想，直到完成）。再往上还有规则和兜底，比如最多跑几轮、搞不定就转人工。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">12</span>什么是 Prompt？怎么写出一个好 Prompt？</summary>
+<div class="ans">
+  <span class="say">「Prompt 就是你给 AI 的指令。写好它有个公式：<b>角色 + 任务 + 约束 + 示例 + 输出格式</b>。比如『你是电商客服（角色），回答退换货问题（任务），不确定就说不确定、不要编（约束），参考这个例子（示例），用三句话以内回答（格式）』。另外复杂任务可以加一句『一步步思考』。」</span>
+  <span class="trap">别说「就是提问」，那显得你没真写过。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">13</span>什么是 RAG？为什么需要它？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「RAG 就是『先查资料再回答』。大模型不知道你们公司的私有文档，直接问就会瞎编。做法是把文档切成小块存进向量库，用户提问时先检索出最相关的几段，塞给模型让它照着答。好处是知识能随时更新、答案有出处、幻觉明显减少。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">14</span>什么是幻觉？怎么减少？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「幻觉就是 AI 不知道却编一个像模像样的答案。减少的办法我一般说四层：给它资料让它照着答（RAG）；Prompt 里明确写『不知道就说不知道，不许编』；让它调工具查真实数据；最后线上人工抽检、把答错的收集起来修。光靠换模型解决不了，得靠流程。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">15</span>RAG 和微调怎么选？</summary>
+<div class="ans">
+  <span class="say">「简单说，RAG 管『知道什么』，微调管『怎么说话、怎么做事』。知识天天变、又要能溯源，就用 RAG——改文档就行，不用重训；要统一说话风格、固定输出格式，才考虑微调。成本上 RAG 低得多，所以一般先上 RAG，不够再微调。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">16</span>什么是 Function Calling / 工具调用？</summary>
+<div class="ans">
+  <span class="say">「就是让模型能调用外部工具。你告诉它有哪些工具、每个要什么参数，模型自己判断该调哪个、把参数填好，程序执行完把结果还给它，它再组织成回答。Agent 能查订单、查价格、发邮件，全靠这个。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">17</span>Token 和上下文窗口是什么？</summary>
+<div class="ans">
+  <span class="say">「Token 是模型处理文字的最小单位，中文大概一个字等于 1 到 1.5 个 token，计费按它算。上下文窗口是一次能塞给它多少 token，超了就得截断或做摘要。它不是越大越好——越长越贵越慢，而且塞太多中间的内容反而容易被忽略。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">18</span>Temperature（温度）是干什么的？</summary>
+<div class="ans">
+  <span class="say">「控制回答的随机性，0 到 2。调低（0 到 0.3）回答稳定、每次差不多，适合客服和抽取信息；调高（0.7 以上）更发散、有创意，适合写文案。我们做 Agent 一般调低，怕它自由发挥乱来。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">19</span>什么是多智能体（Multi-Agent）？</summary>
+<div class="ans">
+  <span class="say">「就是不靠一个 Agent 干所有事，而是拆成几个各有分工的，比如一个查资料、一个写、一个检查，再由一个『主管』调度。好处是每个更专注、好维护；坏处是链路变长、成本和出错点都变多。简单场景其实没必要上，先把单 Agent 做好更划算。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">20</span>听说过 MCP 吗？</summary>
+<div class="ans">
+  <span class="say">「听过，Model Context Protocol，可以理解成 AI 界的 USB-C。以前每接一个外部系统都要单独写适配，MCP 定了一个统一标准，工具按标准暴露出来，模型或 Agent 直接插上用。它解决的是『接工具、接数据源』这件事的标准化。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">21</span>你平时用过哪些 AI 工具或模型？各自怎么样？</summary>
+<div class="ans">
+  <span class="say">「扣子我用来搭过知识库问答机器人，好处是可视化、不用写代码就能跑起来，缺点是复杂逻辑受平台限制；豆包和 Kimi 日常查资料、读长文档；写代码用 Cursor。用下来最大的感受是——模型差距没那么大，真正拉开效果的是你有没有把资料喂对、把规则写清楚。」</span>
+  <b>要点：</b>一定要讲一个自己真用过的细节，别只报名字。
+</div>
+</details>
+
+<h3 class="cat">C. 产品与运营<span>22–33</span></h3>
+
+<details class="qa"><summary><span class="qnum">22</span>怎么判断一个 AI Agent 产品好不好？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我看三层。第一，能不能把事办成——任务完成率、自助解决率；第二，办得好不好——答案准不准、语气舒不舒服、用户满不满意；第三，划不划算——响应快不快、每次调用花多少钱、有多少要转人工。只看日活或者用户说『挺好玩』是会被骗的。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">23</span>Agent 回答得不好，你怎么定位问题？</summary>
+<div class="ans">
+  <span class="say">「顺着链路一段段查：是没听懂问题（意图识别）？还是没查到资料（知识库没有或检索没召回）？还是查到了但没用上（Prompt 没让它参考）？还是模型本身能力不够？看每一步的中间结果，找到断点再改。<b>最忌讳一上来就说『换个更强的模型』</b>，多数问题其实在前面几步。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">24</span>怎么评估一个 Agent 的效果？指标有哪些？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我分两层。离线先建一批标准问题和标准答案，看准确率、召回率、答不出来的比例；上线看真实的——任务完成率、转人工率、差评率、平均响应时间、单次成本。再用大模型批量给回答打分做初筛，人只看低分的和有争议的。关键是要有一套固定的评测集，不然每次改完都靠感觉。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">25</span>什么是 badcase？你怎么用它？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「就是用户真实遇到、Agent 答错或答得不理想的案例。我的用法是四步：收集 → 归类（看哪类问题错得最多）→ 针对性修（补知识库、改 Prompt、加规则或转人工）→ 放进回归测试，确保改完不再犯。这是运营最日常也最有价值的工作，因为它是用户真实反馈。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">26</span>怎么提升用户留存 / 活跃？</summary>
+<div class="ans">
+  <span class="say">「先定义什么叫『有效使用』，比如完成一次有价值的对话，再看次日和 7 日留存。提升主要三件事：第一次体验要给到惊喜，别让用户问三句就放弃；把最高频的场景做成模板或快捷入口，降低使用门槛；定期用新能力或新内容把用户唤回来。留存是体验问题，不是运营活动能硬拉起来的。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">27</span>让你来运营我们的 AI 产品，第一步做什么？</summary>
+<div class="ans">
+  <span class="say">「先不急着做功能。先看现有数据和真实对话记录，搞清楚现在谁在用、卡在哪、最高频的三个问题是什么；然后挑一个『高频、有价值、又好落地』的场景做样板，跑出效果再复制。先止血，再做增长，别一上来铺摊子。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">28</span>怎么从 0 到 1 推一个新功能上线？</summary>
+<div class="ans">
+  <span class="say">「五步：先验证需求是不是真的（访谈加数据）；定清楚成功指标是什么；做最小可用版本；小流量灰度，看数据、收反馈；再决定放大、迭代还是下线。最关键的是先定『什么叫成功』，否则上线了也不知道好坏。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">29</span>什么是 A/B 测试？要注意什么？</summary>
+<div class="ans">
+  <span class="say">「把用户随机分成两组，只改一个变量，跑够样本量，看核心指标差异是不是显著。三个坑：一次改好几个东西说不清是谁的功劳；样本太少就下结论；只看点击这种浅指标，不看留存和满意度。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">30</span>用户投诉 AI 答错了，你怎么处理？</summary>
+<div class="ans">
+  <span class="say">「先安抚、直接给正确答案，别让用户等；然后把这条记录成 badcase；查是知识库缺、Prompt 没约束、还是模型能力问题；修完回归验证。如果同类问题反复出现，就给这类问题加兜底话术或者直接转人工。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">31</span>怎么设计一个 Agent 的人设和话术？</summary>
+<div class="ans">
+  <span class="say">「定三件事：身份（你是谁、能帮什么）、语气（正式还是亲切，最好给几个例句）、边界（什么能答、什么必须拒或转人工）。再写一批『标准问法 → 标准答法』当示例，建一个话术库持续维护。语气要一致，别一会儿官方一会儿卖萌。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">32</span>怎么控制 AI 产品的成本？</summary>
+<div class="ans">
+  <span class="say">「三个杠杆：少喂——检索更准、上下文别塞太多；换模型——简单任务用小模型，难的才上大模型；做缓存——高频问题的答案直接缓存。另外控制回答长度、减少不必要的工具调用轮次，也能省不少。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">33</span>怎么做竞品分析？</summary>
+<div class="ans">
+  <span class="say">「选三到五个直接竞品，按目标用户、核心场景、关键功能、定价、体验短板做一张对比表。重点不是罗列功能，而是找『他们没做好、我们能切入』的点，最后要落到结论和行动建议上，不然就是抄了一堆截图。」</span>
+</div>
+</details>
+
+<h3 class="cat">D. 项目追问<span>34–41</span></h3>
+
+<details class="qa"><summary><span class="qnum">34</span>介绍下你的项目（掌柜智库）</summary>
+<div class="ans">
+  <span class="say">「是一个面向零售行业的企业知识库问答系统。它把商品 PDF 手册自动解析、切块、向量化存进向量库，用户用自然语言提问，系统先检索相关资料再让大模型基于资料回答，还能调工具查价格、做产品对比、必要时联网补充。主要解决的是——企业文档太多，人找不到，AI 又容易瞎编。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">35</span>这个项目里你具体负责什么？</summary>
+<div class="ans">
+  <span class="say">「我主要负责查询这条链路（或如实说清你负责的模块）：用户提问后怎么确认商品名、怎么并行去检索、结果怎么融合排序、最后怎么控制喂给模型的上下文。<b>导入和部署那部分是团队其他人做的，我了解它的作用但没亲自改。</b>」</span>
+  <span class="trap">诚实最重要。被追问没做过的模块，就说「这块我没亲自改，但我知道它是为了解决 XX」。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">36</span>项目里最难的点是什么？</summary>
+<div class="ans">
+  <span class="say">「最难的其实是让答案『可信』。一开始检索回来的资料里混着无关内容，模型就会照着编。我做了两件事：一是检索用多路召回再融合，提高找全的概率；二是重排后不固定取几条，而是按分数明显下降的位置截断，只给最相关的。改完之后，答错的情况明显少了。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">37</span>如果重做一次，你会怎么改？</summary>
+<div class="ans">
+  <span class="say">「我会更早建评测集。当时是边做边凭感觉调，后来才发现应该先有一批标准问答，每次改完都能量化对比，不然容易『感觉变好了其实没变』。另外我会把 Prompt 和配置抽出来做版本管理，方便回滚和对比。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">38</span>这个项目上线了吗？效果怎么样？</summary>
+<div class="ans">
+  <span class="say">「目前是（如实说：课程/个人/内部试用）阶段。效果上我用一批真实问题做过对比，主要看的是答案有没有出处、答不出来的比例、以及答错的情况。没有精确的商业数据，但 badcase 比最初版本少了很多。」</span>
+  <span class="trap">别编「提升了 40%」这种没依据的数字，一追问怎么测的就崩了。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">39</span>为什么选 Milvus / BGE 这些技术？</summary>
+<div class="ans">
+  <span class="say">「选型主要看三点：中文效果、是否开源可控、部署成本。BGE 系列在中文检索上效果比较稳、开源免费；Milvus 是成熟的向量库，支持大规模数据、也支持稠密加稀疏的混合检索。对我们这种要处理大量商品文档的场景够用，也不至于被某家云服务绑死。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">40</span>这个项目你最大的收获是什么？</summary>
+<div class="ans">
+  <span class="say">「最大的收获是理解了『AI 产品不是模型越强越好』。同样的模型，资料喂得对不对、上下文干不干净、规则写没写清楚，效果差得非常远。这让我更想做运营——因为这些问题都发生在模型外面，是运营能改善的。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">41</span>你这个项目和我们岗位有什么关系？</summary>
+<div class="ans">
+  <span class="say">「关系很直接。你们要做 AI Agent，核心就是三件事：知识怎么喂、Prompt 怎么写、效果怎么测——我在项目里都实际踩过。而且我知道哪里容易出问题，比如资料混进无关内容会导致瞎答、模型返回格式偶尔会飘，这些经验能让我上手更快，不用从零试错。」</span>
+</div>
+</details>
+
+<h3 class="cat">E. Python 与技术基础<span>42–49</span></h3>
+
+<details class="qa"><summary><span class="qnum">42</span>你 Python 什么水平？</summary>
+<div class="ans">
+  <span class="say">「能读写脚本、调用大模型 API、用 pandas 处理数据、看懂并改现有代码；算法和复杂工程不是我的强项。这个岗位如果需要写点小工具、跑跑数据、调接口，我是能干的。」</span>
+  <span class="trap">千万别答「精通」。面试官让你现场写个循环或问个装饰器就露馅了，诚实分级反而加分。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">43</span>list 和 dict 有什么区别？</summary>
+<div class="ans">
+  <span class="say">「list 是有序的列表，可以重复，按位置取；dict 是键值对，按 key 取，查找快。实际干活最常用 dict 存结构化数据，比如接口返回的 JSON。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">44</span>怎么用 Python 调用大模型 API？</summary>
+<div class="ans">
+  <span class="say">「用 openai 的 SDK 就行：初始化客户端（key 放在环境变量里），传模型名和 messages——system 定角色，user 是问题，再设个 temperature，最后取返回的第一个结果。」</span>
+  <pre><span class="k">from</span> openai <span class="k">import</span> OpenAI
+client = OpenAI(api_key=os.environ[<span class="s">"API_KEY"</span>], base_url=<span class="s">"..."</span>)
+resp = client.chat.completions.create(
+    model=<span class="s">"gpt-4o-mini"</span>,
+    messages=[{<span class="s">"role"</span>:<span class="s">"system"</span>,<span class="s">"content"</span>:<span class="s">"你是客服"</span>},
+              {<span class="s">"role"</span>:<span class="s">"user"</span>,<span class="s">"content"</span>:<span class="s">"能退货吗"</span>}],
+    temperature=<span class="s">0.3</span>)
+<span class="k">print</span>(resp.choices[<span class="s">0</span>].message.content)</pre>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">45</span>模型返回的 JSON 解析失败过吗？怎么处理？</summary>
+<div class="ans">
+  <span class="say">「遇到过。模型有时会把 JSON 包在 markdown 代码块里，或者前后加一句话，直接解析就报错。我的处理是先剥掉代码块符号、截取首尾大括号，再用 json.loads，外面套 try/except，失败了重试或降级。这也是我在项目里实际踩过的坑。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">46</span>pandas 你会哪些？</summary>
+<div class="ans">
+  <span class="say">「够运营用的：读 CSV 和 Excel、看数据概况、筛选、排序、分组统计、去重清洗、导出。平时做数据分析、统计高频问题这类活基本够。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">47</span>会写爬虫吗？</summary>
+<div class="ans">
+  <span class="say">「简单的会，用 requests 加 BeautifulSoup 抓过页面，知道要设 header、控制请求频率、看 robots 协议。复杂的反爬没深入做过，遇到搞不定的我会换思路或者求助。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">48</span>Git 和部署你了解吗？</summary>
+<div class="ans">
+  <span class="say">「Git 常用操作会用：拉代码、提交、推分支、解决简单冲突。环境上用虚拟环境隔离依赖，用 requirements 安装。服务器部署我看过流程，但还没独立部署过线上服务。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">49</span>遇到 bug 你一般怎么排查？</summary>
+<div class="ans">
+  <span class="say">「先看报错和日志，定位在哪一步出问题；再想办法稳定复现；然后缩小范围，打印中间结果或注释掉部分代码；改完验证。自己搞不定的先搜官方文档和报错原文，还不行再问人，问的时候把已经排查过的东西一起说，别让人从头猜。」</span>
+</div>
+</details>
+
+<h3 class="cat">F. 场景与实操题<span>50–56</span></h3>
+
+<details class="qa"><summary><span class="qnum">50</span>如果让你给我们做一个客服 Agent，你会怎么做？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我会按八步讲。第一，定目标指标，比如自助解决率、满意度。第二，摸清用户和最高频的三个问题。第三，划边界，哪些它答、哪些必须转人工。第四，整理知识库，把 FAQ、产品文档清洗入库。第五，设计流程，意图识别→查资料→必要时调工具→回答→兜底。第六，写 Prompt，定角色、语气、禁止事项。第七，先小范围试用，建 badcase 库。第八，按周看数据迭代。」</span>
+  <b>技巧：</b>讲完骨架就停，等对方追问细节，不要一口气背完。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">51</span>给你一段 Prompt，你会怎么优化？</summary>
+<div class="ans">
+  <span class="say">「先问目标是什么、现在哪里不满意。然后按公式补：角色、任务、约束、示例、输出格式。把模糊的话改成可检验的规则，比如『回答友好一点』改成『用两句话以内、语气亲切、不超过 60 字』。改完拿同一批问题跑一遍，对比前后效果，而不是凭感觉。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">52</span>给你一份用户对话数据，你怎么分析？</summary>
+<div class="ans">
+  <span class="say">「先明确要回答的业务问题，再检查数据口径和质量。然后做三件事：统计高频问题看用户到底想要什么；看哪些问题答得差（用户追问、差评、转人工）；看漏斗，用户在哪个环节流失。最后给结论和能落地的建议，不是甩一堆图。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">53</span>用户问了一个知识库里没有的问题，Agent 该怎么答？</summary>
+<div class="ans">
+  <span class="say">「明确告诉他『这个我暂时查不到』，绝对不编。然后给替代方案：转人工、留联系方式、推荐相关的问题。同时把这条记进 badcase，回头补知识库。宁可说不知道，也不能给个错的答案——用户被骗一次就不信了。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">54</span>怎么让 Agent 回答得更像人？</summary>
+<div class="ans">
+  <span class="say">「少用『根据您的问题』这种模板腔；句子短一点、口语一点；必要时先追问澄清；适当给具体例子。但要注意——客服场景准确比亲切重要，不能为了像人而牺牲准确，更不能瞎聊跑题。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">55</span>老板要你一周内上线一个 Agent，你怎么做？</summary>
+<div class="ans">
+  <span class="say">「先砍范围：只做最高频的一个场景，不做大而全。用现成平台（扣子、Dify）先搭，知识库用手头资料，先内部试用再小范围放开。同时跟老板对齐预期——一周能上的是『可用版』，不是完美版，后面按 badcase 迭代。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">56</span>如果让你配合做产品演示 / 会销，你怎么准备？</summary>
+<div class="ans">
+  <span class="say">「先搞清楚台下是谁、他们最关心什么。演示只讲一个痛点场景，用真实问题现场跑一遍，别念功能列表。准备三个『必成功』的问题保证效果，再准备一个兜底方案防止翻车。演示完留资料和联系方式。演示的成功标准是客户听懂并且想试，不是技术多炫。」</span>
+  <b>提示：</b>这家公司在招会务销售，这题很可能问到，结合公司答会加分。
+</div>
+</details>
+
+<h3 class="cat">G. 行为面 · 稳定性 · 压力题<span>57–66</span></h3>
+
+<details class="qa"><summary><span class="qnum">57</span>你现在还在读书吗？能实习多久？一周来几天？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我目前（课程/论文）安排比较灵活，一周能到岗 X 天，能稳定做到 X 月。如果双方合适，我希望毕业后转正长期做。」</span>
+  <span class="trap">必须给明确数字。含糊其辞是这类岗位被刷的头号原因——小公司最怕招来干两周就走。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">58</span>你期望薪资多少？</summary>
+<div class="ans">
+  <span class="say">「按公司的实习标准来就行，我更看重能不能接触真实业务和转正机会。方便的话想了解下实习补贴和转正后的薪资范围。」</span>
+  <span class="trap">别先报数、别狮子大开口。岗位写 4–6K，实习通常按天算，先问清楚再说。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">59</span>能接受加班吗？</summary>
+<div class="ans">
+  <span class="say">「项目忙的时候能配合，我时间比较灵活。平时我会尽量把事情在工作时间内推进好，需要冲的时候不掉链子。」</span>
+  <b>要点：</b>态度积极但不卑微，别答「随便加多少都行」——显得没有边界感。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">60</span>说实话，你学历和经验都不算突出，我们为什么选你？</summary>
+<div class="ans">
+  <span class="say">「您说得对，我学历和经历确实不算亮眼。但我有两个实在的东西：一是我自己做过 RAG 项目，整个链路我能讲清楚，不是只背概念；二是我时间充足、学得快、不挑活，小团队需要的正是能马上上手的人。这个岗位要的不是简历漂亮，是能把事落地，我觉得我能补上。」</span>
+  <b>要点：</b>先承认，再给两个具体证据，最后落到岗位需求。不卑不亢。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">61</span>你还在面别的公司吗？</summary>
+<div class="ans">
+  <span class="say">「在看几个方向，但我更想做 AI 落地这块，所以对你们这个岗位比较上心。如果这边合适，我会优先考虑。」</span>
+  <span class="trap">别说「没有，就投了你们一家」——显得没竞争力；也别编大厂 offer 抬价，容易翻车。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">62</span>我们有时候需要你配合销售 / 会务，你愿意吗？</summary>
+<div class="ans">
+  <span class="say">「可以，运营本来就离不开一线。我更希望以运营为主，但会销、演示需要我支持，我完全配合——而且我觉得这是好事，能直接听到客户的原话，比看二手反馈有用得多。」</span>
+  <b>提示：</b>这家公司在招会务销售，这是高频「坑题」，别表现出嫌弃或只想坐办公室。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">63</span>说一个你失败或受挫的经历</summary>
+<div class="ans">
+  <span class="say">「（用 STAR 讲一个真实的小失败）比如做项目时我一开始只顾着加功能，结果效果反而更差。后来我才意识到应该先建评测标准再动手。这件事让我改了一个习惯——现在做任何改动，先想清楚『怎么衡量它有没有变好』。」</span>
+  <b>要点：</b>选「方法不对、复盘后有改进」的经历，别选「半途而废 / 和人吵架」这种。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">64</span>如果和同事意见不一致，你怎么办？</summary>
+<div class="ans">
+  <span class="say">「先听清他为什么这么想，很多时候分歧是因为信息不一样。能用数据或小实验验证的就验证，不争输赢。实在定不下来就按负责人的决策执行，事后复盘看谁对。重点是别把分歧变成情绪。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">65</span>你最近在学什么？</summary>
+<div class="ans">
+  <span class="say">「在补 Agent 编排这块，比如 LangGraph 怎么把多个步骤串起来；也在自己搭一个小场景的 Agent 练手。另外在系统看一下 AI 产品的评测方法，因为我觉得这是运营最该会、但很多人不会的部分。」</span>
+  <span class="trap">别说「在学 AI」这种空话，要说具体在学什么、为什么学。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">66</span>你还有什么想问我们的？</summary>
+<div class="ans">
+  <span class="say">「有三个想了解：一是咱们 AI Agent 这条线现在主要面向什么场景或客户？二是运营岗进去第一个月主要负责哪块？三是团队现在对 Agent 效果是怎么评估的，有没有在跑的评测指标或者 badcase 流程？」</span>
+  <span class="trap">别问薪资、别问加不加班、别问能不能远程——这些留到 offer 阶段。问业务和岗位内容，显得你关注的是做事。</span>
+</div>
+</details>
+
+<div class="card" style="margin-top:24px;background:#f4faf9;border-color:#bfe6df">
+  <p style="margin:0;font-size:14px;color:#0b6d60"><b>最后提醒：</b>66 题不用全背。今晚只做三件事——把 ★ 12 题练到能脱口而出；把第 34–41 题（你的项目）挑 3 题讲顺；把第 57、58、62 题（实习时长、薪资、配合销售）想清楚怎么答。剩下的明天临场发挥，有框架就不慌。</p>
+</div>
+
 <footer>祝面试顺利 · 记住：<b>他们要的不是最懂 AI 的人，是最能把 AI 用出结果的人。</b></footer>
 </div>
 </body>
