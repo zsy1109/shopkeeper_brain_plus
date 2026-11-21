@@ -172,6 +172,11 @@
   <p style="margin:12px 0 0;font-size:14px;color:#6b4a12"><b>两条铁律：</b>① 别主动甩 RRF / HyDE / top_k——对运营/HR 反而像背书；等他问深了再掏，那时候才是加分项。② 把项目<b>翻译成运营语言</b>讲：别说「我实现了动态 top_k」，要说「我发现 AI 会瞎答，分析后是喂它的资料混了无关内容，于是调整成只取最相关的几条，答错就少了」——面试官一听就懂，还觉得你有产品 sense。</p>
 </div>
 
+<div class="danger" style="margin-bottom:24px">
+  <p style="margin:0 0 6px"><b>⚠️ 重要更新（HR 已确认）：这个岗位实际是 FDE 线下部署。</b></p>
+  <p style="margin:0">按客户情况<b>驻场搭建</b>，不只是设提示词，还涉及<b>部分开发</b>。所以：① Python 从「基本不问」上调为<b>一定会问</b>；② 出差/驻场意愿、客户沟通、现场救火成为<b>新的必考项</b>；③ 你的 RAG 项目从「加分项」变成<b>核心证据</b>。专项准备见第 17 节。</p>
+</div>
+
 <h2 class="sec"><span class="num">00</span>公司调研 · 江苏觅听<span class="tag">面试前必看，能直接背</span></h2>
 <div class="card">
   <p class="muted" style="margin-top:0;font-size:13px">「了解我们公司吗」是必问题。下面信息来自企查查、BOSS 直聘，核对到 2026-11。</p>
@@ -986,6 +991,106 @@ resp = client.chat.completions.create(
 
 <div class="card" style="margin-top:24px;background:#f4faf9;border-color:#bfe6df">
   <p style="margin:0;font-size:14px;color:#0b6d60"><b>最后提醒：</b>66 题不用全背。今晚只做三件事——把 ★ 12 题练到能脱口而出；把第 34–41 题（你的项目）挑 3 题讲顺；把第 57、58、62 题（实习时长、薪资、配合销售）想清楚怎么答。剩下的明天临场发挥，有框架就不慌。</p>
+</div>
+
+<h2 class="sec"><span class="num">17</span>FDE 专项 · 岗位变了，准备也要变<span class="tag">HR 已确认，按这个准备</span></h2>
+
+<div class="card">
+  <p class="q">先搞懂：FDE 到底是个什么岗？</p>
+  <p class="a"><b>FDE = Forward Deployed Engineer，前置 / 驻场交付工程师</b>，最早是 Palantir 的岗位模式，现在 AI Agent 公司普遍在用。一句话：<b>驻到客户现场，把公司的通用产品改造成客户能用的系统。</b></p>
+  <p class="a">它介于三种角色之间：<b>比纯开发多见了客户</b>、<b>比纯实施多了改代码</b>、<b>比售前多了对交付结果负责</b>。HR 说的三个关键词翻译过来就是：</p>
+  <ul style="margin:6px 0;padding-left:20px;color:var(--ink-2);font-size:13.8px;line-height:1.9">
+    <li><b>「线下部署」</b>= 不是 SaaS 开箱即用，要进客户的环境（常常是内网 / 私有化），装、配、调、教。</li>
+    <li><b>「按客户情况搭建」</b>= 每家客户的数据、流程、术语都不一样，要现场梳理需求再配置，没有标准答案。</li>
+    <li><b>「部分开发」</b>= 写脚本、对接接口、处理数据、改点现成代码——不是让你从零造平台。</li>
+  </ul>
+</div>
+
+<div class="warn">
+  <b>这对你意味着什么（三条）：</b><br>
+  ① <b>技术分要补回来</b>：Python 从「基本不问」上调为「一定会问」，但仍是脚本级，不是算法级。今晚必须能讲清「怎么调 API + 怎么处理 JSON/CSV + 怎么对接一个接口」。<br>
+  ② <b>新增三类必考题</b>：能不能出差驻场、客户需求不明确/老改怎么办、现场出了故障怎么救。<br>
+  ③ <b>你的项目价值变高</b>：它证明你「能独立把一套东西从零搭起来」，这正是 FDE 最看重的。讲的时候强调<b>「我自己搭起来、自己调通、自己排错」</b>，而不只是懂概念。
+</div>
+
+<details class="qa"><summary><span class="qnum">F1</span>你怎么理解 FDE 这个岗位？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「我理解是驻在客户现场的交付工程师。公司的产品是通用的，但每个客户的数据、流程、说法都不一样，FDE 就是到现场把它调成客户能用的样子——梳理需求、配置和写 Prompt、对接他们的系统、写点脚本、培训客户，上线后还要继续维护。跟纯开发比要多见客户，跟纯实施比要能改代码，跟售前比要对最终能不能用起来负责。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F2</span>能接受出差 / 驻场吗？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「可以，我时间比较灵活，南通本地和周边都能跑。驻场我反而觉得是好事——能直接看到客户怎么用、卡在哪一步，比在办公室里猜有用得多。」</span>
+  <span class="trap">如果你确实不能长期驻场，一定要诚实说边界：「短期驻场没问题，长期的话希望提前沟通」。别先答应后反悔，这行最忌讳这个。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F3</span>客户需求说不清楚、还一直改，你怎么办？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「三步。先用客户的话把需求复述一遍确认——『您是不是想要这个效果？』，把模糊的要求变成可以验收的标准；然后说清这一版做什么、什么时候交付，超出的记下来排到下一期；每次变更留个记录，让客户确认。不是不做，是让它有节奏，否则永远交付不了。」</span>
+  <b>核心：</b>管预期，不是拒绝客户。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F4</span>客户环境受限——没外网、数据不能出内网，怎么办？</summary>
+<div class="ans">
+  <span class="say">「先在方案阶段就问清楚三个约束：能不能连外网、模型能不能用云 API、数据能不能出内网。能私有化就本地部署开源模型和向量库；不能联网就把联网能力关掉，只做本地知识库问答；数据敏感就做脱敏和权限控制。这些必须提前问，别到了现场才发现装不了。」</span>
+  <b>这就是 FDE 和纯运营的区别：</b>你要懂环境限制。
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F5</span>你的开发能力到什么程度？能独立做吗？</summary>
+<div class="ans">
+  <span class="say">「能写 Python 脚本做数据处理和接口对接，能调大模型 API，能看懂并修改现成代码，能部署和排查常见问题；复杂的前端和后端架构我不行，需要团队支持。我的定位是——常见的脚本和对接我自己扛，超出能力的提前说，不硬撑到交付前才爆。」</span>
+  <span class="trap">别答「我什么都能写」。FDE 面试官一定会追问「那你写个 XX 试试」，诚实分级反而显得可靠。</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F6</span>客户当着你的面说「你们这 AI 根本不好用」，怎么办？<span class="star">★</span></summary>
+<div class="ans">
+  <span class="say">「先不解释，先看具体 case。请客户给两三个真实问题，我当场跑一遍，判断是知识库缺资料、Prompt 没约束住、还是检索没找到。能当场修就修，修不了先给临时兜底——转人工或者标准话术，同时明确告诉他什么时候给正式方案。回去把这个 case 记下来做回归测试。现场最重要的是让客户觉得你在解决问题，而不是在解释为什么做不到。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F7</span>交付时间特别紧，做不完怎么办？</summary>
+<div class="ans">
+  <span class="say">「先砍范围，保住核心场景能跑通；然后同时跟客户和公司同步——这一版能做什么、不能做什么、下一期补什么。宁可先上一个能用的版本，也别为了追求完美延期。上线后按真实使用情况迭代，比闷头做完再给客户看要稳。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F8</span>客户员工不会用、甚至抵触 AI，怎么办？</summary>
+<div class="ans">
+  <span class="say">「培训要落到他们自己的场景里，用他们自己的数据演示，别讲功能。先让一两个愿意用的人用起来，做出效果，再让他们去影响其他人；同时把高频操作做成模板或快捷入口，降低门槛。抵触往往是因为怕麻烦或者怕被替代，得先让他们尝到省事的甜头。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F9</span>客户的数据安全怎么保证？</summary>
+<div class="ans">
+  <span class="say">「最小权限、敏感字段脱敏、操作留日志、按需做数据不出内网。跟客户明确哪些数据会被用到、存在哪里、谁能看。这块我会严格按公司规范来，拿不准的先问，不自作主张。」</span>
+</div>
+</details>
+
+<details class="qa"><summary><span class="qnum">F10</span>客户提了一个明显不合理的需求，你怎么办？</summary>
+<div class="ans">
+  <span class="say">「先搞清楚他背后真正想解决什么——他要的往往不是这个功能。能给替代方案就给替代；确实做不到的，明确说不，同时说明原因和别的路径。不硬顶，也不乱承诺，因为承诺了做不到，最后丢的是信任。」</span>
+</div>
+</details>
+
+<div class="card" style="background:#f4faf9;border-color:#bfe6df">
+  <p class="q" style="margin-top:0">FDE 岗要反过来问 HR 的 4 个问题（很重要）</p>
+  <ol style="margin:6px 0;padding-left:20px;color:var(--ink-2);font-size:13.8px;line-height:1.9">
+    <li>交付主要在本地还是外地？出差/驻场的频率大概多少？（判断你能不能接受）</li>
+    <li>客户以什么类型为主？是私有化部署还是云端？（判断技术难度）</li>
+    <li>「部分开发」具体指什么——写脚本、对接接口，还是要改前端？（判断你的能力是否够）</li>
+    <li>新人有没有人带？我进去第一个项目大概是什么类型？（判断成长环境）</li>
+  </ol>
+  <p style="margin:10px 0 0;font-size:13.5px;color:#0b6d60"><b>另外提醒：</b>4–6K 招 FDE 偏低，说明这是<b>初级/培养岗</b>——他们不会指望你独立扛大项目，而是希望你学得快、能跑现场、肯干活。别被「涉及开发」吓到，也别把自己包装成高级工程师。定位成「能落地、肯跑现场、学得快」最合适。</p>
+</div>
+
+<div class="danger">
+  <p style="margin:0 0 6px"><b>还要留个心眼（自己判断，别在面试说）：</b></p>
+  <p style="margin:0">公司同时在招会务销售，「AI Agent 运营 + FDE 线下部署」很可能<b>兼着售前支持和现场陪访</b>，甚至带一点销售性质。面试时可以从「这个岗位的考核指标是什么——是交付验收，还是也有业绩要求？」这句侧面问出来。你自己要想清楚能不能接受经常跑客户、做演示、被客户挑毛病。</p>
 </div>
 
 <footer>祝面试顺利 · 记住：<b>他们要的不是最懂 AI 的人，是最能把 AI 用出结果的人。</b></footer>
